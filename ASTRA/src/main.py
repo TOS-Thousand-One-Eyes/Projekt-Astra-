@@ -1,5 +1,10 @@
+from core.brain import Brain
+
+
 def main():
-    print("Astra is Starting")
+    brain = Brain()
+    brain.greet()
+
 
 if __name__ == "__main__":
-        main()
+    main()
