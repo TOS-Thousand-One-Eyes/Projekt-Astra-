@@ -1,18 +1,34 @@
 # ASTRA
 
-Astra je můj dlouhodobý AI projekt.
+Astra is my long-term AI project.
 
-## Cíl
+## Goal
 
-Vytvořit osobní AI asistenci, která bude:
+Build a personal AI assistant that can gradually evolve into a modular, local-first AI platform.
 
-- mluvit
-- vidět
-- používat internet
-- učit se
-- pomáhat s programováním
-- jednou fungovat jako můj druhý mozek
+Core goals:
+
+- speak
+- see
+- use the internet (when needed)
+- learn from experience
+- assist with programming
+- automate daily tasks
+- become my second brain
+
+## Principles
+
+- Offline First
+- Desktop First
+- Modular Architecture
+- User Ownership
+
+## Vision
+
+Astra is designed to be a long-term companion that grows together with its owner.
+
+It is built around modularity, local execution and user ownership rather than dependence on a single AI provider.
 
 ---
 
-Projekt začal 1. 7. 2026.
+Project started: 2026-07-01
