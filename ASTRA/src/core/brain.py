@@ -3,8 +3,9 @@ class Brain:
         self.name = "Astra"
         self.version = "0.0.1"
         self.running = False
-
-        print(f"{self.name} ver.{self.version} | running:{self.running} initialized")
-
+       
+    def start(self):
+        self.running = True
     def greet(self):
         print(f"Hello, I am {self.name} ver.{self.version} | running:{self.running}.")
+        

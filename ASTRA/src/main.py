@@ -3,6 +3,7 @@ from core.brain import Brain
 
 def main():
     brain = Brain()
+    brain.start()
     brain.greet()
 
 
