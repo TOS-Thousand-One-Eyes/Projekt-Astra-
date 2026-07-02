@@ -10,6 +10,10 @@ Status: Active Development
 
 ASTRA/
 │
+├── .github/
+│   └── workflows/
+│       └── tests.yml
+│
 ├── docs/
 │   ├── architecture/
 │   ├── journal/
@@ -156,10 +160,14 @@ ASTRA/
   discover them as regular packages.
 
 ### Tests
-- pytest suite (58 tests) in `tests/`, configured by `pytest.ini`.
+- pytest suite in `tests/`, configured by `pytest.ini`.
 - Covers lifecycle transitions, commands, facts, notes, memory persistence,
   and config loading.
 - Run with: `python -m pytest`
+
+### Continuous Integration
+- `.github/workflows/tests.yml` runs `python -m pytest` on every push and
+  pull request (Ubuntu, Python 3.14, `pip install -e ".[dev]"`).
 
 ### Startup
 main.py only:

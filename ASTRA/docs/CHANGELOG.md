@@ -356,6 +356,16 @@ top item in `docs/suggestions.md`.
   the current turn
 - Extended `tests/test_memory.py` and `tests/test_brain.py::TestNotes`
 
+### Continuous Integration
+
+**Why:** There was a real test suite but nothing running it automatically —
+a broken commit would only be caught by remembering to run `pytest` by
+hand.
+
+- Added `.github/workflows/tests.yml`: checks out the repo, sets up Python
+  3.14, runs `pip install -e ".[dev]"`, then `python -m pytest`, on every
+  push and pull request
+
 ## Notes
 
 Run the tests with: `python -m pytest`
