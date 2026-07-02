@@ -8,3 +8,6 @@ __pycache__/
 
 # Windows
 desktop.ini
+
+# Runtime data
+data/

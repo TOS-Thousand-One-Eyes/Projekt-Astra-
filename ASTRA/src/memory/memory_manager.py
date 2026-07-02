@@ -10,9 +10,13 @@ class MemoryManager:
 
     def remember(self, entry):
         self.short_memory.remember(entry)
+        self.long_memory.remember(entry)
 
     def recall(self):
         return self.short_memory.recall()
+
+    def recall_long(self):
+        return self.long_memory.recall()
 
     def clear(self):
         self.short_memory.clear()
