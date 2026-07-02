@@ -145,6 +145,9 @@ ASTRA/
   count removed) are exposed through `MemoryManager` and as
   `search <text>` / `forget <text>` chat commands; `forget()` clears the
   entry from both `LongMemory` and `ShortMemory`.
+- `MemoryCommand` filters `recall`/`search` to `type == "note"` entries
+  only, so chat transcript noise doesn't drown out real notes; a
+  `history` trigger shows the unfiltered last 5 entries (notes + chat).
 
 ### Logger
 - Timestamps, console output, in-memory log list.
@@ -191,7 +194,7 @@ ASTRA/
   discover them as regular packages.
 
 ### Tests
-- pytest suite (105 tests) in `tests/`, configured by `pytest.ini`.
+- pytest suite (108 tests) in `tests/`, configured by `pytest.ini`.
 - Covers lifecycle transitions, commands, facts, notes, memory search/
   forget, modules, session summary, startup briefing, memory persistence,
   and config loading.

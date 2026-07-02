@@ -239,6 +239,25 @@ class TestNotes:
         response = running_brain.receive("search bicycle")
         assert "couldn't find" in response
 
+    def test_search_notes_only_excludes_chat_echo(self, running_brain):
+        running_brain.receive("remember buy milk")
+        response = running_brain.receive("search milk")
+        assert "buy milk" in response
+        assert "remember buy milk" not in response
+        assert "Got it, I'll remember" not in response
+
+    def test_recall_notes_only_excludes_chat_echo(self, running_brain):
+        running_brain.receive("remember buy milk")
+        response = running_brain.receive("recall")
+        assert "buy milk" in response
+        assert "remember buy milk" not in response
+        assert "Got it, I'll remember" not in response
+
+    def test_history_shows_everything_including_chat(self, running_brain):
+        running_brain.receive("remember buy milk")
+        response = running_brain.receive("history")
+        assert "remember buy milk" in response
+
 
 class TestSessionSummary:
 

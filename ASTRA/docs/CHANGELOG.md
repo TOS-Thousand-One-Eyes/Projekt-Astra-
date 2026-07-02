@@ -515,3 +515,23 @@ first.
   Brain still reaches `RUNNING`/`OFFLINE` and remaining modules still run
   when one fails
 
+### Notes-only recall/search
+
+**Why:** With `LongMemory` entries tagged `"chat"`/`"note"` (v0.0.9),
+`recall`/`search` still showed both mixed together — `search milk` after
+`remember buy milk` returned the note *and* the raw `remember buy milk`
+command echo *and* the bot's confirmation, three near-duplicate hits for
+one real memory.
+
+- `recall`/`what do you remember` and `search <text>` now filter to
+  `type == "note"` entries only — filtering lives in `MemoryCommand`
+  (presentation layer), matching the existing convention that the
+  last-5 cap and entry formatting already live there, not in
+  `LongMemory`/`MemoryManager`
+- New `history` trigger shows the last 5 entries unfiltered (notes and
+  chat both) for anyone who wants the old mixed view back
+- `forget <text>` is intentionally left unscoped (can still remove chat
+  entries too) — only `recall`/`search` were noisy
+- `help_text` updated to match the new behavior
+- Extended `tests/test_brain.py::TestNotes`
+

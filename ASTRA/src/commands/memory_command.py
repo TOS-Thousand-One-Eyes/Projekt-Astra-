@@ -4,11 +4,13 @@ from commands.base import Command
 class MemoryCommand(Command):
 
     RECALL_TRIGGERS = ("recall", "what do you remember")
+    HISTORY_TRIGGERS = ("history",)
 
     help_text = (
         "- remember <something> - ask me to save a note\n"
-        "- recall / what do you remember - see recent memories\n"
-        "- search <text> - search everything I remember\n"
+        "- recall / what do you remember - see your recent notes\n"
+        "- search <text> - search your notes\n"
+        "- history - see everything, notes and chat both\n"
         "- forget <text> - remove a memory that matches (case-insensitive)"
     )
 
@@ -32,6 +34,9 @@ class MemoryCommand(Command):
             query = self._argument(message)
             return self._search_summary(query)
 
+        if normalized in self.HISTORY_TRIGGERS:
+            return self._history_summary()
+
         if normalized in self.RECALL_TRIGGERS:
             return self._recall_summary()
 
@@ -41,16 +46,22 @@ class MemoryCommand(Command):
         return message.split(" ", 1)[1].strip()
 
     def _recall_summary(self):
-        entries = self.memory.recall_long()
-        if not entries:
+        notes = [item for item in self.memory.recall_long() if item["type"] == "note"]
+        if not notes:
             return "I don't remember anything yet."
-        return self._format_entries(entries[-5:], "Here's what I remember recently:")
+        return self._format_entries(notes[-5:], "Here's what I remember recently:")
 
     def _search_summary(self, query):
-        matches = self.memory.search_long(query)
+        matches = [item for item in self.memory.search_long(query) if item["type"] == "note"]
         if not matches:
             return f"I couldn't find anything matching: {query}"
         return self._format_entries(matches, "Here's what I found:")
+
+    def _history_summary(self):
+        entries = self.memory.recall_long()
+        if not entries:
+            return "I don't remember anything yet."
+        return self._format_entries(entries[-5:], "Here's everything recently, notes and chat:")
 
     def _format_entries(self, entries, header):
         lines = [f"- [{item['timestamp']}] {item['entry']}" for item in entries]
