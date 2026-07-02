@@ -96,6 +96,32 @@ class TestFacts:
         assert "your name is Erik" in response
 
 
+class TestPersonalization:
+
+    def test_greeting_uses_known_name_for_hi(self, running_brain):
+        running_brain.receive("my name is Erik")
+        assert running_brain.receive("hi") == "Hello, Erik!"
+
+    def test_greeting_uses_known_name_for_hello(self, running_brain):
+        running_brain.receive("my name is Erik")
+        assert running_brain.receive("hello") == "Hi there, Erik!"
+
+    def test_greeting_uses_known_name_for_hey(self, running_brain):
+        running_brain.receive("my name is Erik")
+        assert running_brain.receive("hey") == "Hey, Erik!"
+
+    def test_how_are_you_stays_generic_even_with_known_name(self, running_brain):
+        running_brain.receive("my name is Erik")
+        response = running_brain.receive("how are you")
+        assert "Erik" not in response
+
+    def test_startup_greeting_uses_known_name(self, config, memory):
+        memory.learn("name", "Erik")
+        brain = Brain(Logger(), config, memory, Modules())
+        brain.start()
+        assert any("Hello, Erik! I am" in entry for entry in brain.logger.get_logs())
+
+
 class TestNotes:
 
     def test_remember_note(self, running_brain):

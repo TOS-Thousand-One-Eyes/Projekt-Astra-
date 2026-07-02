@@ -38,7 +38,11 @@ class Brain:
         )
         self._set_state(self.RUNNING)
         self.logger.log("Brain is ready.")
-        self.logger.log(f"Hello! I am {self.config.name}.")
+        name = self.memory.get_fact("name")
+        if name:
+            self.logger.log(f"Hello, {name}! I am {self.config.name}.")
+        else:
+            self.logger.log(f"Hello! I am {self.config.name}.")
 
         if self.update_checker:
             self.update_checker.check()

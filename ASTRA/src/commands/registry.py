@@ -23,7 +23,7 @@ class CommandRegistry:
 def build_default_registry(config, memory):
     fact = FactCommand(memory)
     note = MemoryCommand(memory)
-    greeting = GreetingCommand(config)
+    greeting = GreetingCommand(config, memory)
     farewell = ExitCommand(config)
     help_command = HelpCommand([fact, note, greeting, farewell])
 

@@ -366,6 +366,23 @@ hand.
   3.14, runs `pip install -e ".[dev]"`, then `python -m pytest`, on every
   push and pull request
 
+### Personalization
+
+**Why:** Astra could already learn `my name is Erik` via `FactCommand`, but
+nothing ever read it back — the whole point of memory feeding into
+behavior, per `docs/suggestions.md`.
+
+- `GreetingCommand` now takes `memory` and, when a `name` fact is known,
+  personalizes the three short greetings: `hi` → `"Hello, {name}!"`,
+  `hello` → `"Hi there, {name}!"`, `hey` → `"Hey, {name}!"`. `how are you`
+  and `what's up` are left generic — they don't read naturally with a name
+  inserted
+- `Brain.start()`'s own greeting log line does the same:
+  `"Hello, {name}! I am Astra."` when known, otherwise unchanged
+- Scoped to greeting only for now (not farewell, not every response) —
+  smaller and matches the suggestion's own example
+- Extended `tests/test_brain.py` with `TestPersonalization`
+
 ## Notes
 
 Run the tests with: `python -m pytest`

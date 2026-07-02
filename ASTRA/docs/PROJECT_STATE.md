@@ -96,6 +96,9 @@ ASTRA/
   `HelpCommand`, `ExitCommand`.
 - `build_default_registry(config, memory)` in `commands/registry.py` is the
   single place that wires concrete commands together.
+- `GreetingCommand` personalizes `hi`/`hello`/`hey` with the known `name`
+  fact when one has been learned (e.g. "Hello, Erik!"); `Brain.start()`'s
+  own greeting log line does the same.
 
 ### Config
 - Loads settings from `config.json` in the project root.
