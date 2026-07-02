@@ -1,4 +1,7 @@
+from datetime import datetime
+
 from commands.registry import build_default_registry
+from utils.time_format import format_duration
 
 
 class Brain:
@@ -23,6 +26,8 @@ class Brain:
         self.modules = modules
         self.commands = commands or build_default_registry(config, memory)
         self.update_checker = update_checker
+        self._session_started_at = None
+        self._facts_at_start = 0
 
     @property
     def is_running(self):
@@ -30,6 +35,8 @@ class Brain:
 
     def start(self):
         self._set_state(self.STARTING)
+        self._session_started_at = datetime.now()
+        self._facts_at_start = len(self.memory.all_facts())
         self.logger.log(f"{self.config.name} v{self.config.version} is starting...")
         self.logger.log(f"Config loaded from {self.config.path.name}.")
         self.logger.log(
@@ -54,6 +61,7 @@ class Brain:
         self.logger.log(f"Stopping {self.config.name}...")
         self.modules.stop_all()
         self.logger.log(f"Modules stopped: {len(self.modules.list_modules())}.")
+        self._log_session_summary()
         self._set_state(self.OFFLINE)
         self.logger.log(f"{self.config.name} stopped.")
 
@@ -74,6 +82,15 @@ class Brain:
 
     def process(self, message):
         return self.commands.dispatch(message).response
+
+    def _log_session_summary(self):
+        message_count = len(self.memory.recall())
+        new_facts = len(self.memory.all_facts()) - self._facts_at_start
+        duration = format_duration(datetime.now() - self._session_started_at)
+        self.logger.log(
+            f"Session summary: {message_count} messages exchanged, "
+            f"{new_facts} new facts learned, session lasted {duration}."
+        )
 
     def _set_state(self, new_state):
         allowed = self.TRANSITIONS[self.state]

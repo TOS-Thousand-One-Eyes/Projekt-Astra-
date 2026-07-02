@@ -203,3 +203,16 @@ class TestNotes:
     def test_search_when_nothing_matches(self, running_brain):
         response = running_brain.receive("search bicycle")
         assert "couldn't find" in response
+
+
+class TestSessionSummary:
+
+    def test_stop_logs_session_summary_with_counts(self, running_brain):
+        running_brain.receive("hi")
+        running_brain.receive("my name is Erik")
+        running_brain.stop()
+
+        summary_lines = [line for line in running_brain.logger.get_logs() if "Session summary" in line]
+        assert len(summary_lines) == 1
+        assert "4 messages exchanged" in summary_lines[0]
+        assert "1 new facts learned" in summary_lines[0]

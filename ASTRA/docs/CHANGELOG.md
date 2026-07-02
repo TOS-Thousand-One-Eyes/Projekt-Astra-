@@ -401,6 +401,23 @@ real subsystem contract to plug into.
 - Added `tests/test_modules.py`; extended `tests/test_brain.py` with
   `TestModulesLifecycle`
 
+### Session summary on shutdown
+
+**Why:** `Brain`'s `STOPPING` phase existed but did nothing beyond logging
+"Stopping..." — a real chance to make the lifecycle feel alive, cheap to
+build since `ShortMemory` already holds the whole session.
+
+- Added `src/utils/time_format.py`: `format_duration(delta)` renders a
+  `timedelta` as a short human string (`"5s"`, `"2m 5s"`, `"1h 3m"`,
+  `"2d 4h"`)
+- `Brain.start()` now records the session start time and the fact count
+  at that moment
+- `Brain.stop()` logs one line before shutting down:
+  `"Session summary: {n} messages exchanged, {n} new facts learned,
+  session lasted {duration}."`
+- Added `tests/test_time_format.py`; extended `tests/test_brain.py` with
+  `TestSessionSummary`
+
 ## Notes
 
 Run the tests with: `python -m pytest`

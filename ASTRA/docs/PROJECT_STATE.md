@@ -53,6 +53,7 @@ ASTRA/
 │   ├── utils/
 │   │   ├── __init__.py
 │   │   ├── logger.py
+│   │   ├── time_format.py
 │   │   └── update_checker.py
 │   └── main.py
 │
@@ -64,6 +65,7 @@ ASTRA/
 │   ├── test_main.py
 │   ├── test_memory.py
 │   ├── test_modules.py
+│   ├── test_time_format.py
 │   └── test_update_checker.py
 │
 ├── data/            (gitignored - runtime memory files)
@@ -88,6 +90,8 @@ ASTRA/
   commands or their trigger words.
 - Uses dependency injection for Logger, Config, MemoryManager, Modules,
   and (optionally) a CommandRegistry.
+- On `stop()`, logs a session summary: messages exchanged, new facts
+  learned, and session duration (via `utils/time_format.format_duration`).
 
 ### Commands
 - `Command` base class: `handle(message, normalized) -> str | None`, plus

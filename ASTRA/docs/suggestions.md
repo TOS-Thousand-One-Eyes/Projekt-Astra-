@@ -6,14 +6,7 @@ Done items are kept at the bottom for history.
 
 ---
 
-## 1. Session summary on shutdown
-
-The Brain now has a proper `STOPPING` phase — use it. On shutdown, log a
-small session summary: how many messages were exchanged, how many new facts
-were learned, session duration. Cheap to build (ShortMemory already holds
-the session), and makes the lifecycle feel alive.
-
-## 2. Startup briefing steps
+## 1. Startup briefing steps
 
 `PROJECT_STATE.md` lists the planned startup sequence (system check, time
 check, reminders, morning briefing...). The lifecycle's `STARTING` phase is
@@ -21,7 +14,7 @@ now the natural home for these. Start with the easy ones: report the current
 date/time and how long since the last session (LongMemory timestamps already
 make this possible).
 
-## 3. Local LLM as a fallback brain
+## 2. Local LLM as a fallback brain
 
 Per the "Offline First" principle: instead of `I heard: ...` for unknown
 input, a `LanguageModule` could pass the message to a local model (e.g. via
@@ -37,6 +30,10 @@ a framework wrapper is not.
 
 ## Done
 
+- ~~**Session summary on shutdown**~~ — Done in v0.0.9: `Brain.stop()`
+  logs messages exchanged, new facts learned, and session duration, via
+  a new `utils/time_format.format_duration()` helper; covered by
+  `tests/test_time_format.py` and `tests/test_brain.py::TestSessionSummary`.
 - ~~**Real Modules system**~~ — Done in v0.0.9: base `Module` class
   (`name`, `start()`, `stop()`), `Modules.start_all()`/`stop_all()`, and
   `Brain.start()`/`stop()` now actually drive module lifecycle instead of
