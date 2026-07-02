@@ -1,5 +1,5 @@
 class Logger:
     def __init__(self):
-        pass
+        self.logs = []
     def log(self, message):
         print(message)
