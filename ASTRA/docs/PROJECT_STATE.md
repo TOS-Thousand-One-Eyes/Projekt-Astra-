@@ -1,7 +1,7 @@
 # PROJECT_STATE.md
 
 # ASTRA
-Version: 0.0.8
+Version: 0.0.9
 Status: Active Development
 
 ---
@@ -92,6 +92,9 @@ ASTRA/
   and (optionally) a CommandRegistry.
 - On `stop()`, logs a session summary: messages exchanged, new facts
   learned, and session duration (via `utils/time_format.format_duration`).
+- On `start()`, logs the current date/time and, using the last LongMemory
+  entry's timestamp, how long ago the previous session ended (or "This is
+  our first session!" if LongMemory is empty).
 
 ### Commands
 - `Command` base class: `handle(message, normalized) -> str | None`, plus
@@ -182,8 +185,9 @@ ASTRA/
   discover them as regular packages.
 
 ### Tests
-- pytest suite in `tests/`, configured by `pytest.ini`.
-- Covers lifecycle transitions, commands, facts, notes, memory persistence,
+- pytest suite (91 tests) in `tests/`, configured by `pytest.ini`.
+- Covers lifecycle transitions, commands, facts, notes, memory search/
+  forget, modules, session summary, startup briefing, memory persistence,
   and config loading.
 - Run with: `python -m pytest`
 

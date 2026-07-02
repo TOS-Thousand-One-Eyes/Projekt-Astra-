@@ -418,9 +418,37 @@ build since `ShortMemory` already holds the whole session.
 - Added `tests/test_time_format.py`; extended `tests/test_brain.py` with
   `TestSessionSummary`
 
+### Startup briefing
+
+**Why:** `docs/suggestions.md` named the current date/time and time since
+the last session as the easiest first steps of the planned startup
+briefing sequence, and `LongMemory`'s timestamps already made "time since
+last session" possible with no new state.
+
+- `Brain.start()` now logs the current date/time
+  (`"Current time: 2026-07-03 21:04:11."`)
+- Also logs how long ago the previous session's last memory entry was
+  (`"Last seen 2m 5s ago."`, reusing `format_duration` from the session
+  summary work above), or `"This is our first session!"` when LongMemory
+  is empty
+- Reads `LongMemory` once at the very top of `start()`, before this
+  session's own turns are recorded, so it only ever reflects prior
+  sessions
+- Extended `tests/test_brain.py` with `TestStartupBriefing`
+
+## Changed
+
+- Bumped version to `0.0.9` in `pyproject.toml`, `config.json`, and
+  `Config.DEFAULTS`
+
 ## Notes
 
-Run the tests with: `python -m pytest`
+Run the tests with: `python -m pytest` (91 tests)
+
+This version closes out all six items that were pending in
+`docs/suggestions.md`: memory search/forget with note/transcript
+separation, CI, personalization, a real Modules system, session summary,
+and startup briefing.
 
 ---
 

@@ -37,12 +37,16 @@ class Brain:
         self._set_state(self.STARTING)
         self._session_started_at = datetime.now()
         self._facts_at_start = len(self.memory.all_facts())
+        long_entries = self.memory.recall_long()
+
         self.logger.log(f"{self.config.name} v{self.config.version} is starting...")
         self.logger.log(f"Config loaded from {self.config.path.name}.")
         self.logger.log(
-            f"Memory loaded: {len(self.memory.recall_long())} entries, "
+            f"Memory loaded: {len(long_entries)} entries, "
             f"{len(self.memory.all_facts())} facts."
         )
+        self.logger.log(f"Current time: {self._session_started_at.strftime('%Y-%m-%d %H:%M:%S')}.")
+        self._log_last_seen(long_entries)
         self.modules.start_all()
         self.logger.log(f"Modules started: {len(self.modules.list_modules())}.")
         self._set_state(self.RUNNING)
@@ -82,6 +86,14 @@ class Brain:
 
     def process(self, message):
         return self.commands.dispatch(message).response
+
+    def _log_last_seen(self, long_entries):
+        if not long_entries:
+            self.logger.log("This is our first session!")
+            return
+        last_timestamp = datetime.fromisoformat(long_entries[-1]["timestamp"])
+        ago = format_duration(self._session_started_at - last_timestamp)
+        self.logger.log(f"Last seen {ago} ago.")
 
     def _log_session_summary(self):
         message_count = len(self.memory.recall())

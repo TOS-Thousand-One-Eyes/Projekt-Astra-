@@ -216,3 +216,17 @@ class TestSessionSummary:
         assert len(summary_lines) == 1
         assert "4 messages exchanged" in summary_lines[0]
         assert "1 new facts learned" in summary_lines[0]
+
+
+class TestStartupBriefing:
+
+    def test_first_session_message_when_memory_empty(self, brain):
+        brain.start()
+        assert any("first session" in entry for entry in brain.logger.get_logs())
+
+    def test_last_seen_message_when_prior_entry_exists(self, config, memory):
+        memory.long_memory.remember("previous chat")
+        brain = Brain(Logger(), config, memory, Modules())
+        brain.start()
+        logs = brain.logger.get_logs()
+        assert any("Last seen" in entry and "ago" in entry for entry in logs)

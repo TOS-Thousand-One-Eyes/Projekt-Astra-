@@ -6,15 +6,7 @@ Done items are kept at the bottom for history.
 
 ---
 
-## 1. Startup briefing steps
-
-`PROJECT_STATE.md` lists the planned startup sequence (system check, time
-check, reminders, morning briefing...). The lifecycle's `STARTING` phase is
-now the natural home for these. Start with the easy ones: report the current
-date/time and how long since the last session (LongMemory timestamps already
-make this possible).
-
-## 2. Local LLM as a fallback brain
+## 1. Local LLM as a fallback brain
 
 Per the "Offline First" principle: instead of `I heard: ...` for unknown
 input, a `LanguageModule` could pass the message to a local model (e.g. via
@@ -30,6 +22,10 @@ a framework wrapper is not.
 
 ## Done
 
+- ~~**Startup briefing steps**~~ — Done in v0.0.9: `Brain.start()` logs
+  the current date/time and how long ago the previous session's last
+  memory entry was (or "This is our first session!"); covered by
+  `tests/test_brain.py::TestStartupBriefing`.
 - ~~**Session summary on shutdown**~~ — Done in v0.0.9: `Brain.stop()`
   logs messages exchanged, new facts learned, and session duration, via
   a new `utils/time_format.format_duration()` helper; covered by
