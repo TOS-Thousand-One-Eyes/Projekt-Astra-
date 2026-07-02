@@ -35,9 +35,9 @@ class Brain:
             f"Memory loaded: {len(self.memory.recall_long())} entries, "
             f"{len(self.memory.all_facts())} facts."
         )
-        self.logger.log(f"Hello! I am {self.config.name}.")
         self._set_state(self.RUNNING)
         self.logger.log("Brain is ready.")
+        self.logger.log(f"Hello! I am {self.config.name}.")
 
     def stop(self):
         self._set_state(self.STOPPING)
