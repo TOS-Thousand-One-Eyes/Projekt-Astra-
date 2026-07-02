@@ -6,22 +6,14 @@ Done items are kept at the bottom for history.
 
 ---
 
-## 1. Real Modules system
-
-`Modules` is still a placeholder holding the strings `"Module1"` and
-`"Module2"`. Design the real thing: a base `Module` class with `name`,
-`start()`, `stop()`, and let the Brain start/stop modules as part of its
-lifecycle (the lifecycle hooks now exist for exactly this). Voice, vision,
-and internet from the roadmap would each become a module.
-
-## 2. Session summary on shutdown
+## 1. Session summary on shutdown
 
 The Brain now has a proper `STOPPING` phase — use it. On shutdown, log a
 small session summary: how many messages were exchanged, how many new facts
 were learned, session duration. Cheap to build (ShortMemory already holds
 the session), and makes the lifecycle feel alive.
 
-## 3. Startup briefing steps
+## 2. Startup briefing steps
 
 `PROJECT_STATE.md` lists the planned startup sequence (system check, time
 check, reminders, morning briefing...). The lifecycle's `STARTING` phase is
@@ -29,13 +21,14 @@ now the natural home for these. Start with the easy ones: report the current
 date/time and how long since the last session (LongMemory timestamps already
 make this possible).
 
-## 4. Local LLM as a fallback brain
+## 3. Local LLM as a fallback brain
 
 Per the "Offline First" principle: instead of `I heard: ...` for unknown
 input, a `LanguageModule` could pass the message to a local model (e.g. via
 Ollama). Rule-based commands stay instant and free; only unmatched input
 goes to the model. This is the bridge from "chatbot with if-statements" to
-"actual AI assistant" — but it deserves the Modules system (#1) first.
+"actual AI assistant" — the Modules system it depends on now exists
+(`src/modules/module.py`), so a `LanguageModule` just needs to be written.
 Note: per the permanent development rules, no external AI frameworks
 (LangChain, LangGraph, etc.) before v0.1 — a direct Ollama HTTP call is fine,
 a framework wrapper is not.
@@ -44,6 +37,11 @@ a framework wrapper is not.
 
 ## Done
 
+- ~~**Real Modules system**~~ — Done in v0.0.9: base `Module` class
+  (`name`, `start()`, `stop()`), `Modules.start_all()`/`stop_all()`, and
+  `Brain.start()`/`stop()` now actually drive module lifecycle instead of
+  holding an inert placeholder list; covered by `tests/test_modules.py`
+  and `tests/test_brain.py::TestModulesLifecycle`.
 - ~~**Use facts to personalize Astra**~~ — Done in v0.0.9: `GreetingCommand`
   and `Brain.start()`'s greeting now use the known `name` fact for
   `hi`/`hello`/`hey` (e.g. "Hello, Erik!"); scoped to greeting only.

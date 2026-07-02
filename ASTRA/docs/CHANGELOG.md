@@ -383,6 +383,24 @@ behavior, per `docs/suggestions.md`.
   smaller and matches the suggestion's own example
 - Extended `tests/test_brain.py` with `TestPersonalization`
 
+### Real Modules system
+
+**Why:** `Modules` was a placeholder holding the strings `"Module1"` and
+`"Module2"`, injected into `Brain` but never actually read anywhere —
+zero behavior. Voice, vision, and internet from the roadmap all need a
+real subsystem contract to plug into.
+
+- Added `src/modules/module.py`: base `Module` class with a `name`
+  attribute and `start()`/`stop()` (raise `NotImplementedError` in the
+  base, same convention as `Command.handle()`)
+- `Modules` now starts empty (`self.modules = []`, dropping the dead
+  placeholder strings) and gained `start_all()`/`stop_all()`
+- `Brain.start()`/`stop()` now actually call
+  `self.modules.start_all()`/`stop_all()` as part of the lifecycle, and
+  log how many modules ran (even `0`) — no more inert dependency
+- Added `tests/test_modules.py`; extended `tests/test_brain.py` with
+  `TestModulesLifecycle`
+
 ## Notes
 
 Run the tests with: `python -m pytest`

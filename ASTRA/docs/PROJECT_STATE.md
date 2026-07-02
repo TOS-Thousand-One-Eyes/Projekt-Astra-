@@ -48,6 +48,7 @@ ASTRA/
 │   │   └── short_memory.py
 │   ├── modules/
 │   │   ├── __init__.py
+│   │   ├── module.py
 │   │   └── modules.py
 │   ├── utils/
 │   │   ├── __init__.py
@@ -62,6 +63,7 @@ ASTRA/
 │   ├── test_logger.py
 │   ├── test_main.py
 │   ├── test_memory.py
+│   ├── test_modules.py
 │   └── test_update_checker.py
 │
 ├── data/            (gitignored - runtime memory files)
@@ -104,6 +106,19 @@ ASTRA/
 - Loads settings from `config.json` in the project root.
 - Missing file or missing keys fall back to `DEFAULTS` in code.
 - File path is injectable for testing.
+
+### Modules
+- `Module` (`src/modules/module.py`) is the base class for a Brain-managed
+  subsystem: a `name` attribute, `start()`/`stop()` (both raise
+  `NotImplementedError` in the base, matching `Command.handle()`'s
+  convention).
+- `Modules` holds a list of `Module` instances (`add_module()`,
+  `list_modules()`) and drives them together via `start_all()`/`stop_all()`.
+- `Brain.start()`/`stop()` call `self.modules.start_all()`/`stop_all()` as
+  part of the lifecycle and always log how many modules ran, even zero.
+- No real modules exist yet (Voice/Vision/Internet from the roadmap will
+  each become one) — today `Modules()` starts empty, so this is a safe
+  no-op.
 
 ### Memory
 - MemoryManager routes to ShortMemory (session), LongMemory (persistent

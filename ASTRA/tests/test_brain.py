@@ -1,8 +1,24 @@
 import pytest
 
 from core.brain import Brain
+from modules.module import Module
 from modules.modules import Modules
 from utils.logger import Logger
+
+
+class StubModule(Module):
+
+    name = "stub"
+
+    def __init__(self):
+        self.started = False
+        self.stopped = False
+
+    def start(self):
+        self.started = True
+
+    def stop(self):
+        self.stopped = True
 
 
 class TestLifecycle:
@@ -57,6 +73,26 @@ class TestUpdateCheck:
 
     def test_no_check_when_update_checker_is_none(self, running_brain):
         assert running_brain.update_checker is None
+
+
+class TestModulesLifecycle:
+
+    def test_start_starts_every_module(self, config, memory):
+        modules = Modules()
+        stub = StubModule()
+        modules.add_module(stub)
+        brain = Brain(Logger(), config, memory, modules)
+        brain.start()
+        assert stub.started is True
+
+    def test_stop_stops_every_module(self, config, memory):
+        modules = Modules()
+        stub = StubModule()
+        modules.add_module(stub)
+        brain = Brain(Logger(), config, memory, modules)
+        brain.start()
+        brain.stop()
+        assert stub.stopped is True
 
 
 class TestCommands:
