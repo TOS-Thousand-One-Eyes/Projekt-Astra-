@@ -1,0 +1,330 @@
+[
+  {
+    "timestamp": "2026-07-02T10:34:09",
+    "entry": "help"
+  },
+  {
+    "timestamp": "2026-07-02T10:34:09",
+    "entry": "Here's what I can do:\n- my <thing> is <value> - teach me a fact (e.g. my name is Erik)\n- what is my <thing> - ask me about a fact you taught me\n- facts / what do you know about me - list everything you've taught me\n- remember <something> - ask me to save a note\n- recall / what do you remember - see recent memories\n- hi / hello / hey - greet me\n- how are you - ask how I'm doing\n- what is your name / who are you - ask who I am\n- bye / exit / quit - stop the conversation\n- help - show this message"
+  },
+  {
+    "timestamp": "2026-07-02T10:34:17",
+    "entry": "my name is what"
+  },
+  {
+    "timestamp": "2026-07-02T10:34:17",
+    "entry": "Got it, I'll remember that your name is what."
+  },
+  {
+    "timestamp": "2026-07-02T10:34:21",
+    "entry": "my name is Erik"
+  },
+  {
+    "timestamp": "2026-07-02T10:34:21",
+    "entry": "Got it, I'll remember that your name is Erik."
+  },
+  {
+    "timestamp": "2026-07-02T10:34:25",
+    "entry": "what is my name"
+  },
+  {
+    "timestamp": "2026-07-02T10:34:25",
+    "entry": "Your name is Erik."
+  },
+  {
+    "timestamp": "2026-07-02T10:34:35",
+    "entry": "who are you"
+  },
+  {
+    "timestamp": "2026-07-02T10:34:35",
+    "entry": "I'm Astra, your personal AI assistant."
+  },
+  {
+    "timestamp": "2026-07-02T10:34:43",
+    "entry": "facts"
+  },
+  {
+    "timestamp": "2026-07-02T10:34:43",
+    "entry": "Here's what I know about you:\n- your name is Erik"
+  },
+  {
+    "timestamp": "2026-07-02T10:35:01",
+    "entry": "remember I like dark chocolate."
+  },
+  {
+    "timestamp": "2026-07-02T10:35:01",
+    "entry": "I like dark chocolate."
+  },
+  {
+    "timestamp": "2026-07-02T10:35:01",
+    "entry": "Got it, I'll remember: I like dark chocolate."
+  },
+  {
+    "timestamp": "2026-07-02T10:35:09",
+    "entry": "recall"
+  },
+  {
+    "timestamp": "2026-07-02T10:35:09",
+    "entry": "Here's what I remember recently:\n- [2026-07-02T10:34:43] Here's what I know about you:\n- your name is Erik\n- [2026-07-02T10:35:01] remember I like dark chocolate.\n- [2026-07-02T10:35:01] I like dark chocolate.\n- [2026-07-02T10:35:01] Got it, I'll remember: I like dark chocolate.\n- [2026-07-02T10:35:09] recall"
+  },
+  {
+    "timestamp": "2026-07-02T10:35:12",
+    "entry": "Recall"
+  },
+  {
+    "timestamp": "2026-07-02T10:35:12",
+    "entry": "Here's what I remember recently:\n- [2026-07-02T10:35:01] I like dark chocolate.\n- [2026-07-02T10:35:01] Got it, I'll remember: I like dark chocolate.\n- [2026-07-02T10:35:09] recall\n- [2026-07-02T10:35:09] Here's what I remember recently:\n- [2026-07-02T10:34:43] Here's what I know about you:\n- your name is Erik\n- [2026-07-02T10:35:01] remember I like dark chocolate.\n- [2026-07-02T10:35:01] I like dark chocolate.\n- [2026-07-02T10:35:01] Got it, I'll remember: I like dark chocolate.\n- [2026-07-02T10:35:09] recall\n- [2026-07-02T10:35:12] Recall"
+  },
+  {
+    "timestamp": "2026-07-02T10:35:16",
+    "entry": "what do you remember"
+  },
+  {
+    "timestamp": "2026-07-02T10:35:16",
+    "entry": "Here's what I remember recently:\n- [2026-07-02T10:35:09] recall\n- [2026-07-02T10:35:09] Here's what I remember recently:\n- [2026-07-02T10:34:43] Here's what I know about you:\n- your name is Erik\n- [2026-07-02T10:35:01] remember I like dark chocolate.\n- [2026-07-02T10:35:01] I like dark chocolate.\n- [2026-07-02T10:35:01] Got it, I'll remember: I like dark chocolate.\n- [2026-07-02T10:35:09] recall\n- [2026-07-02T10:35:12] Recall\n- [2026-07-02T10:35:12] Here's what I remember recently:\n- [2026-07-02T10:35:01] I like dark chocolate.\n- [2026-07-02T10:35:01] Got it, I'll remember: I like dark chocolate.\n- [2026-07-02T10:35:09] recall\n- [2026-07-02T10:35:09] Here's what I remember recently:\n- [2026-07-02T10:34:43] Here's what I know about you:\n- your name is Erik\n- [2026-07-02T10:35:01] remember I like dark chocolate.\n- [2026-07-02T10:35:01] I like dark chocolate.\n- [2026-07-02T10:35:01] Got it, I'll remember: I like dark chocolate.\n- [2026-07-02T10:35:09] recall\n- [2026-07-02T10:35:12] Recall\n- [2026-07-02T10:35:16] what do you remember"
+  },
+  {
+    "timestamp": "2026-07-02T10:35:52",
+    "entry": "remember"
+  },
+  {
+    "timestamp": "2026-07-02T10:35:52",
+    "entry": "I heard: remember"
+  },
+  {
+    "timestamp": "2026-07-02T10:35:58",
+    "entry": "what do you remember"
+  },
+  {
+    "timestamp": "2026-07-02T10:35:58",
+    "entry": "Here's what I remember recently:\n- [2026-07-02T10:35:16] what do you remember\n- [2026-07-02T10:35:16] Here's what I remember recently:\n- [2026-07-02T10:35:09] recall\n- [2026-07-02T10:35:09] Here's what I remember recently:\n- [2026-07-02T10:34:43] Here's what I know about you:\n- your name is Erik\n- [2026-07-02T10:35:01] remember I like dark chocolate.\n- [2026-07-02T10:35:01] I like dark chocolate.\n- [2026-07-02T10:35:01] Got it, I'll remember: I like dark chocolate.\n- [2026-07-02T10:35:09] recall\n- [2026-07-02T10:35:12] Recall\n- [2026-07-02T10:35:12] Here's what I remember recently:\n- [2026-07-02T10:35:01] I like dark chocolate.\n- [2026-07-02T10:35:01] Got it, I'll remember: I like dark chocolate.\n- [2026-07-02T10:35:09] recall\n- [2026-07-02T10:35:09] Here's what I remember recently:\n- [2026-07-02T10:34:43] Here's what I know about you:\n- your name is Erik\n- [2026-07-02T10:35:01] remember I like dark chocolate.\n- [2026-07-02T10:35:01] I like dark chocolate.\n- [2026-07-02T10:35:01] Got it, I'll remember: I like dark chocolate.\n- [2026-07-02T10:35:09] recall\n- [2026-07-02T10:35:12] Recall\n- [2026-07-02T10:35:16] what do you remember\n- [2026-07-02T10:35:52] remember\n- [2026-07-02T10:35:52] I heard: remember\n- [2026-07-02T10:35:58] what do you remember"
+  },
+  {
+    "timestamp": "2026-07-02T10:36:01",
+    "entry": "recall"
+  },
+  {
+    "timestamp": "2026-07-02T10:36:01",
+    "entry": "Here's what I remember recently:\n- [2026-07-02T10:35:52] remember\n- [2026-07-02T10:35:52] I heard: remember\n- [2026-07-02T10:35:58] what do you remember\n- [2026-07-02T10:35:58] Here's what I remember recently:\n- [2026-07-02T10:35:16] what do you remember\n- [2026-07-02T10:35:16] Here's what I remember recently:\n- [2026-07-02T10:35:09] recall\n- [2026-07-02T10:35:09] Here's what I remember recently:\n- [2026-07-02T10:34:43] Here's what I know about you:\n- your name is Erik\n- [2026-07-02T10:35:01] remember I like dark chocolate.\n- [2026-07-02T10:35:01] I like dark chocolate.\n- [2026-07-02T10:35:01] Got it, I'll remember: I like dark chocolate.\n- [2026-07-02T10:35:09] recall\n- [2026-07-02T10:35:12] Recall\n- [2026-07-02T10:35:12] Here's what I remember recently:\n- [2026-07-02T10:35:01] I like dark chocolate.\n- [2026-07-02T10:35:01] Got it, I'll remember: I like dark chocolate.\n- [2026-07-02T10:35:09] recall\n- [2026-07-02T10:35:09] Here's what I remember recently:\n- [2026-07-02T10:34:43] Here's what I know about you:\n- your name is Erik\n- [2026-07-02T10:35:01] remember I like dark chocolate.\n- [2026-07-02T10:35:01] I like dark chocolate.\n- [2026-07-02T10:35:01] Got it, I'll remember: I like dark chocolate.\n- [2026-07-02T10:35:09] recall\n- [2026-07-02T10:35:12] Recall\n- [2026-07-02T10:35:16] what do you remember\n- [2026-07-02T10:35:52] remember\n- [2026-07-02T10:35:52] I heard: remember\n- [2026-07-02T10:35:58] what do you remember\n- [2026-07-02T10:36:01] recall"
+  },
+  {
+    "timestamp": "2026-07-02T10:36:03",
+    "entry": "?"
+  },
+  {
+    "timestamp": "2026-07-02T10:36:03",
+    "entry": "I heard: ?"
+  },
+  {
+    "timestamp": "2026-07-02T10:36:06",
+    "entry": "w"
+  },
+  {
+    "timestamp": "2026-07-02T10:36:06",
+    "entry": "I heard: w"
+  },
+  {
+    "timestamp": "2026-07-02T10:48:45",
+    "entry": "Who are you"
+  },
+  {
+    "timestamp": "2026-07-02T10:48:45",
+    "entry": "I'm Astra, your personal AI assistant."
+  },
+  {
+    "timestamp": "2026-07-02T10:48:49",
+    "entry": "Who am I"
+  },
+  {
+    "timestamp": "2026-07-02T10:48:49",
+    "entry": "I heard: Who am I"
+  },
+  {
+    "timestamp": "2026-07-02T10:48:53",
+    "entry": "Recall"
+  },
+  {
+    "timestamp": "2026-07-02T10:48:53",
+    "entry": "Here's what I remember recently:\n- [2026-07-02T10:48:45] Who are you\n- [2026-07-02T10:48:45] I'm Astra, your personal AI assistant.\n- [2026-07-02T10:48:49] Who am I\n- [2026-07-02T10:48:49] I heard: Who am I\n- [2026-07-02T10:48:53] Recall"
+  },
+  {
+    "timestamp": "2026-07-02T10:48:59",
+    "entry": "Remember"
+  },
+  {
+    "timestamp": "2026-07-02T10:48:59",
+    "entry": "I heard: Remember"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:05",
+    "entry": "What do you remember"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:05",
+    "entry": "Here's what I remember recently:\n- [2026-07-02T10:48:53] Recall\n- [2026-07-02T10:48:53] Here's what I remember recently:\n- [2026-07-02T10:48:45] Who are you\n- [2026-07-02T10:48:45] I'm Astra, your personal AI assistant.\n- [2026-07-02T10:48:49] Who am I\n- [2026-07-02T10:48:49] I heard: Who am I\n- [2026-07-02T10:48:53] Recall\n- [2026-07-02T10:48:59] Remember\n- [2026-07-02T10:48:59] I heard: Remember\n- [2026-07-02T10:49:05] What do you remember"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:15",
+    "entry": "Facts"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:15",
+    "entry": "Here's what I know about you:\n- your name is Erik"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:27",
+    "entry": "Remember I like dark chocolate"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:27",
+    "entry": "I like dark chocolate"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:27",
+    "entry": "Got it, I'll remember: I like dark chocolate"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:33",
+    "entry": "Facts"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:33",
+    "entry": "Here's what I know about you:\n- your name is Erik"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:38",
+    "entry": "Recall"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:38",
+    "entry": "Here's what I remember recently:\n- [2026-07-02T10:49:27] I like dark chocolate\n- [2026-07-02T10:49:27] Got it, I'll remember: I like dark chocolate\n- [2026-07-02T10:49:33] Facts\n- [2026-07-02T10:49:33] Here's what I know about you:\n- your name is Erik\n- [2026-07-02T10:49:38] Recall"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:46",
+    "entry": "How are you"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:46",
+    "entry": "I'm doing well, thanks for asking! How about you?"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:49",
+    "entry": "Good"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:49",
+    "entry": "I heard: Good"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:55",
+    "entry": "Black"
+  },
+  {
+    "timestamp": "2026-07-02T10:49:55",
+    "entry": "I heard: Black"
+  },
+  {
+    "timestamp": "2026-07-02T11:49:15",
+    "entry": "help"
+  },
+  {
+    "timestamp": "2026-07-02T11:49:15",
+    "entry": "Here's what I can do:\n- my <thing> is <value> - teach me a fact (e.g. my name is Erik)\n- what is my <thing> - ask me about a fact you taught me\n- facts / what do you know about me - list everything you've taught me\n- remember <something> - ask me to save a note\n- recall / what do you remember - see recent memories\n- hi / hello / hey - greet me\n- how are you - ask how I'm doing\n- what is your name / who are you - ask who I am\n- bye / exit / quit - stop the conversation\n- help - show this message"
+  },
+  {
+    "timestamp": "2026-07-02T11:52:27",
+    "entry": "Hi"
+  },
+  {
+    "timestamp": "2026-07-02T11:52:27",
+    "entry": "Hello!"
+  },
+  {
+    "timestamp": "2026-07-02T12:51:36",
+    "entry": "hello"
+  },
+  {
+    "timestamp": "2026-07-02T12:51:36",
+    "entry": "Hi there!"
+  },
+  {
+    "timestamp": "2026-07-02T12:51:36",
+    "entry": "bye"
+  },
+  {
+    "timestamp": "2026-07-02T12:51:36",
+    "entry": "Goodbye! - Astra"
+  },
+  {
+    "timestamp": "2026-07-02T12:52:00",
+    "entry": "bye"
+  },
+  {
+    "timestamp": "2026-07-02T12:52:00",
+    "entry": "Goodbye! - Astra"
+  },
+  {
+    "timestamp": "2026-07-02T12:56:18",
+    "entry": "C:\\Users\\gaming\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe c:/Development/ASTRA/src/main.py"
+  },
+  {
+    "timestamp": "2026-07-02T12:56:18",
+    "entry": "I heard: C:\\Users\\gaming\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe c:/Development/ASTRA/src/main.py"
+  },
+  {
+    "timestamp": "2026-07-02T13:06:23",
+    "entry": "Hi"
+  },
+  {
+    "timestamp": "2026-07-02T13:06:23",
+    "entry": "Hello!"
+  },
+  {
+    "timestamp": "2026-07-02T18:55:17",
+    "entry": "bye"
+  },
+  {
+    "timestamp": "2026-07-02T18:55:17",
+    "entry": "Goodbye! - Astra"
+  },
+  {
+    "timestamp": "2026-07-02T18:55:23",
+    "entry": "bye"
+  },
+  {
+    "timestamp": "2026-07-02T18:55:23",
+    "entry": "Goodbye! - Astra"
+  },
+  {
+    "timestamp": "2026-07-02T19:06:31",
+    "entry": "bye"
+  },
+  {
+    "timestamp": "2026-07-02T19:06:31",
+    "entry": "Goodbye! - Astra"
+  },
+  {
+    "timestamp": "2026-07-02T19:08:51",
+    "entry": "bye"
+  },
+  {
+    "timestamp": "2026-07-02T19:08:51",
+    "entry": "Goodbye! - Astra"
+  },
+  {
+    "timestamp": "2026-07-02T19:21:27",
+    "entry": "bye"
+  },
+  {
+    "timestamp": "2026-07-02T19:21:27",
+    "entry": "Goodbye! - Astra"
+  },
+  {
+    "timestamp": "2026-07-02T19:21:34",
+    "entry": "bye"
+  },
+  {
+    "timestamp": "2026-07-02T19:21:34",
+    "entry": "Goodbye! - Astra"
+  }
+]
