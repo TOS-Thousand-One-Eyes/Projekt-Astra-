@@ -15,13 +15,14 @@ class Brain:
         STOPPING: (OFFLINE,),
     }
 
-    def __init__(self, logger, config, memory, modules, commands=None):
+    def __init__(self, logger, config, memory, modules, commands=None, update_checker=None):
         self.state = self.OFFLINE
         self.logger = logger
         self.config = config
         self.memory = memory
         self.modules = modules
         self.commands = commands or build_default_registry(config, memory)
+        self.update_checker = update_checker
 
     @property
     def is_running(self):
@@ -38,6 +39,11 @@ class Brain:
         self._set_state(self.RUNNING)
         self.logger.log("Brain is ready.")
         self.logger.log(f"Hello! I am {self.config.name}.")
+
+        if self.update_checker:
+            update_message = self.update_checker.check()
+            if update_message:
+                self.logger.log(update_message)
 
     def stop(self):
         self._set_state(self.STOPPING)

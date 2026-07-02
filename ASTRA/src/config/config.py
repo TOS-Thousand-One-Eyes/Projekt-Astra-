@@ -9,6 +9,7 @@ DEFAULTS = {
     "version": "0.0.8",
     "log_level": "INFO",
     "log_to_file": False,
+    "check_for_updates": True,
 }
 
 
@@ -22,6 +23,7 @@ class Config:
         self.version = settings["version"]
         self.log_level = settings["log_level"]
         self.log_to_file = settings["log_to_file"]
+        self.check_for_updates = settings["check_for_updates"]
 
     def _load(self):
         if not self.path.exists():

@@ -1,6 +1,8 @@
 import pytest
 
 from core.brain import Brain
+from modules.modules import Modules
+from utils.logger import Logger
 
 
 class TestLifecycle:
@@ -36,6 +38,32 @@ class TestLifecycle:
         response = running_brain.receive("bye")
         assert "Goodbye" in response
         assert running_brain.state == Brain.OFFLINE
+
+
+class TestUpdateCheck:
+
+    def test_logs_update_message_when_available(self, config, memory):
+        class StubUpdateChecker:
+            def check(self):
+                return "A newer version of Astra (v9.9.9) is available. Download it at https://example.com"
+
+        logger = Logger()
+        brain = Brain(logger, config, memory, Modules(), update_checker=StubUpdateChecker())
+        brain.start()
+        assert any("newer version" in entry for entry in logger.get_logs())
+
+    def test_no_log_when_no_update_available(self, config, memory):
+        class StubUpdateChecker:
+            def check(self):
+                return None
+
+        logger = Logger()
+        brain = Brain(logger, config, memory, Modules(), update_checker=StubUpdateChecker())
+        brain.start()
+        assert not any("newer version" in entry for entry in logger.get_logs())
+
+    def test_no_check_when_update_checker_is_none(self, running_brain):
+        assert running_brain.update_checker is None
 
 
 class TestCommands:

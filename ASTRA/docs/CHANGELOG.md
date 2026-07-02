@@ -260,12 +260,36 @@ Logger capability.
 - Added `tests/test_logger.py` and extended `tests/test_config.py` to
   cover the new behavior
 
+### Update Checker
+
+**Why:** ASTRA had no way to tell you it was out of date; the only option
+was checking GitHub by hand. This is ASTRA's first internet-touching code,
+so it had to hold to "Offline First": never block or crash startup when
+there's no network.
+
+- `UpdateChecker` (`src/utils/update_checker.py`) fetches `version` from
+  `config.json` on the GitHub repo's `main` branch over plain HTTPS (the
+  repo is public — no credentials involved) and compares it to the local
+  version
+- On `Brain.start()`, if a newer version exists, logs one sentence with a
+  link to the repo (`https://github.com/TOS-Thousand-One-Eyes/Projekt-Astra-`);
+  if up to date, stays silent
+- Any network error, timeout, or malformed response is caught and treated
+  as "skip the check" — no exception ever reaches `Brain`
+- New `config.json` key `check_for_updates` (default `true`); when `false`,
+  `main.py` never constructs an `UpdateChecker`, so no network call happens
+- Injected into `Brain` the same way as Logger/Config/MemoryManager;
+  `fetch` is injectable so `tests/test_update_checker.py` never touches
+  the real network — verified manually instead (real GitHub check, a
+  simulated outdated version, and a real unreachable-host timeout)
+
 ## Notes
 
 Run the tests with: `python -m pytest`
 
 This version closes out the "Logger: file output + levels" item from
-`docs/suggestions.md` and the v0.0.8 roadmap milestone.
+`docs/suggestions.md` and the v0.0.8 roadmap milestone, and adds the
+Update Checker on top.
 
 ---
 

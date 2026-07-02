@@ -37,3 +37,15 @@ def test_loads_log_settings_from_file(tmp_path):
     config = Config(path=path)
     assert config.log_level == "DEBUG"
     assert config.log_to_file is True
+
+
+def test_check_for_updates_default(tmp_path):
+    config = Config(path=tmp_path / "missing.json")
+    assert config.check_for_updates == DEFAULTS["check_for_updates"]
+
+
+def test_loads_check_for_updates_from_file(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"check_for_updates": False}), encoding="utf-8")
+    config = Config(path=path)
+    assert config.check_for_updates is False

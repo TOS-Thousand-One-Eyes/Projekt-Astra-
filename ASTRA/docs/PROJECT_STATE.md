@@ -41,7 +41,8 @@ ASTRA/
 │   ├── modules/
 │   │   └── modules.py
 │   ├── utils/
-│   │   └── logger.py
+│   │   ├── logger.py
+│   │   └── update_checker.py
 │   └── main.py
 │
 ├── tests/
@@ -50,7 +51,8 @@ ASTRA/
 │   ├── test_config.py
 │   ├── test_logger.py
 │   ├── test_main.py
-│   └── test_memory.py
+│   ├── test_memory.py
+│   └── test_update_checker.py
 │
 ├── data/            (gitignored - runtime memory files)
 ├── config.json
@@ -103,8 +105,23 @@ ASTRA/
 - Optional file output to `data/astra.log` (path injectable for testing),
   controlled by `config.json`'s `log_level` and `log_to_file` keys.
 
+### Update Checker
+- `UpdateChecker` fetches `config.json`'s `version` field from the GitHub
+  repo's `main` branch (a plain unauthenticated HTTPS GET — the repo is
+  public) and compares it against the local version.
+- On `Brain.start()`, if a newer version is available, logs one sentence
+  with a link to the repo; otherwise stays silent.
+- Fails silently (returns `None`, logs nothing) on any network error,
+  timeout, or malformed response — Offline First is preserved, ASTRA never
+  blocks or crashes on startup without internet.
+- Controlled by `config.json`'s `check_for_updates` key (default `true`);
+  when `false`, `main.py` never constructs an `UpdateChecker` and no
+  network call happens at all.
+- Injected into `Brain` like Logger/Config/MemoryManager; `fetch` is
+  injectable so tests never touch the real network.
+
 ### Tests
-- pytest suite (29 tests) in `tests/`, configured by `pytest.ini`.
+- pytest suite (56 tests) in `tests/`, configured by `pytest.ini`.
 - Covers lifecycle transitions, commands, facts, notes, memory persistence,
   and config loading.
 - Run with: `python -m pytest`
