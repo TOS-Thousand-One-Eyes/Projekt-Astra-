@@ -25,3 +25,18 @@ These are permanent and apply to every future change, not just the current one:
 - One commit = one capability
 - Preserve backwards compatibility whenever possible
 - Do not break existing tests
+
+# RELEASE CHECKLIST
+
+When bumping the version:
+
+- Update `[project] version` in `pyproject.toml`
+- Update `"version"` in `config.json`
+- Update `Version:` in `docs/PROJECT_STATE.md`
+- Add a new dated section to `docs/CHANGELOG.md`
+
+`config.json` is the only version value Astra reads at runtime (see
+`src/config/config.py`) — `pyproject.toml`'s version is the packaging/
+release-tag source and isn't read by the app. They're synced by hand,
+not by code. There's no third Python-level copy to keep in sync anymore:
+`Config.DEFAULTS` no longer hardcodes a version literal.

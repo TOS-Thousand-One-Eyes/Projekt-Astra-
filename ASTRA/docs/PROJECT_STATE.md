@@ -113,6 +113,11 @@ ASTRA/
 - Loads settings from `config.json` in the project root.
 - Missing file or missing keys fall back to `DEFAULTS` in code.
 - File path is injectable for testing.
+- `version` is the one exception: it's not in `DEFAULTS` — `config.json`
+  is the sole runtime source of truth, falling back to an honest
+  `UNKNOWN_VERSION = "0.0.0-unknown"` sentinel if the key is missing. See
+  the "RELEASE CHECKLIST" in `docs/MANIFEST.md` for how the version is
+  kept in sync with `pyproject.toml` (by hand, not by code).
 
 ### Modules
 - `Module` (`src/modules/module.py`) is the base class for a Brain-managed
@@ -194,7 +199,7 @@ ASTRA/
   discover them as regular packages.
 
 ### Tests
-- pytest suite (108 tests) in `tests/`, configured by `pytest.ini`.
+- pytest suite (110 tests) in `tests/`, configured by `pytest.ini`.
 - Covers lifecycle transitions, commands, facts, notes, memory search/
   forget, modules, session summary, startup briefing, memory persistence,
   and config loading.

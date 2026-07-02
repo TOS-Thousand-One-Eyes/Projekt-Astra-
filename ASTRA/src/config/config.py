@@ -4,9 +4,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_FILE = PROJECT_ROOT / "config.json"
 
+UNKNOWN_VERSION = "0.0.0-unknown"
+
 DEFAULTS = {
     "name": "Astra",
-    "version": "0.0.9",
     "log_level": "INFO",
     "log_to_file": False,
     "check_for_updates": True,
@@ -20,7 +21,7 @@ class Config:
         settings = dict(DEFAULTS)
         settings.update(self._load())
         self.name = settings["name"]
-        self.version = settings["version"]
+        self.version = settings.get("version", UNKNOWN_VERSION)
         self.log_level = settings["log_level"]
         self.log_to_file = settings["log_to_file"]
         self.check_for_updates = settings["check_for_updates"]

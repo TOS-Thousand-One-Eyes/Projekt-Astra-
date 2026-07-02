@@ -535,3 +535,29 @@ one real memory.
 - `help_text` updated to match the new behavior
 - Extended `tests/test_brain.py::TestNotes`
 
+### Single source of truth for the version number
+
+**Why:** `0.0.9` was hand-edited in three places kept in sync manually:
+`pyproject.toml`, `config.json`, and `Config.DEFAULTS`. Considered
+`importlib.metadata.version("astra")` as an automatic fix, but it
+empirically returns a **stale** value on this very checkout (an editable
+install can lag behind `pyproject.toml`) and raises `PackageNotFoundError`
+for anyone running straight from `src/` without installing first, which
+is exactly how this project's own test suite runs (`pytest.ini`'s
+`pythonpath = src`). Considered reading `pyproject.toml` directly via
+`tomllib`, but that needs Python 3.11+ while the project declares
+`requires-python = ">=3.10"`, and a hand-rolled TOML fallback parser is
+real complexity this "do not overengineer" project doesn't need.
+
+- `Config.DEFAULTS` no longer carries a `"version"` literal — `config.json`
+  is the sole *runtime* source of truth (it already was, via
+  `UpdateChecker` and `Brain.start()`'s log line)
+- `Config.version` now falls back to an honest `UNKNOWN_VERSION =
+  "0.0.0-unknown"` sentinel if `config.json` is missing the key, instead
+  of silently repeating a literal that itself needed manual updates
+- `pyproject.toml`'s version remains the hand-maintained packaging/
+  release-tag source, synced by a documented checklist, not by code —
+  added a "RELEASE CHECKLIST" section to `docs/MANIFEST.md`
+- Updated `tests/test_config.py` for the removed `DEFAULTS["version"]`
+  key; added two tests for the new fallback sentinel
+
