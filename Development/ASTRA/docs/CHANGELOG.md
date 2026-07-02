@@ -165,3 +165,58 @@ the v0.0.7 "Config System" item forward.
 
 ---
 
+# v0.0.7 - 02.07.2026
+
+## Added
+
+### Development Rules
+
+**Why:** Erik set a list of permanent constraints (pure Python, no
+LangChain/LangGraph/external AI frameworks before v0.1, no overengineering,
+small single-capability commits, preserve backwards compatibility, never
+break tests) in conversation, on top of the existing README principles
+(Offline First / Desktop First / Modular Architecture / User Ownership).
+Rules that only live in chat history get forgotten or silently violated
+later — writing them into the repo makes them binding for every future
+change, including ones made in a different session.
+
+- Added a `DEVELOPMENT RULES` section to `docs/MANIFEST.md` listing all of
+  the above
+
+### Command Registry
+
+**Why:** `Brain.process()` had grown into an if/elif chain, and `Brain`
+itself owned every command's data directly as class attributes
+(`GREETINGS`, `FAREWELLS`, `LEARN_PATTERN`, `QUERY_PATTERN`). Every new
+command meant editing `Brain` again, which contradicts "Brain should only
+dispatch commands" and would only get worse — help, facts, notes, and exit
+had already made the method long, and voice/vision/plugins from the roadmap
+would make it much longer. The fix needed to add zero new dependencies
+(pure Python `re`/`dict`, per the development rules above) and change zero
+observable behavior, so the 29 existing tests could stay untouched as proof
+nothing broke.
+
+- Replaced the if/elif chain with a `CommandRegistry` (`src/commands/`)
+- Every command is now its own class: `GreetingCommand`, `FactCommand`,
+  `MemoryCommand`, `HelpCommand`, `ExitCommand`, all implementing a shared
+  `Command.handle(message, normalized) -> str | None` contract
+- `Brain` no longer knows about individual commands or trigger words — it
+  only dispatches and reacts to `DispatchResult.stops_brain` (a small result
+  object, not just a string, so `Brain` can tell whether to call `self.stop()`
+  without hardcoding which words mean "exit" and without re-dispatching the
+  message a second time, which would have double-run side effects like
+  `memory.learn()`)
+- `build_default_registry(config, memory)` is the single place that wires
+  commands together; `Brain` imports only that factory function
+- No behavior changed: all 29 existing tests pass unmodified
+
+## Notes
+
+Run the tests with: `python -m pytest`
+
+This version records the project's permanent development rules and closes
+out the "Command registry instead of if/elif chains" item from
+`docs/suggestions.md`.
+
+---
+

@@ -6,7 +6,7 @@ CONFIG_FILE = PROJECT_ROOT / "config.json"
 
 DEFAULTS = {
     "name": "Astra",
-    "version": "0.0.6",
+    "version": "0.0.7",
 }
 
 
