@@ -23,7 +23,7 @@ class UpdateChecker:
             latest = self.fetch()
             latest_parsed = self._parse(latest)
             current_parsed = self._parse(self.current_version)
-        except (OSError, ValueError, KeyError, TypeError):
+        except Exception:
             return None
 
         if latest_parsed > current_parsed:

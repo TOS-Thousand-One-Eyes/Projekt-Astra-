@@ -282,6 +282,28 @@ there's no network.
   `fetch` is injectable so `tests/test_update_checker.py` never touches
   the real network — verified manually instead (real GitHub check, a
   simulated outdated version, and a real unreachable-host timeout)
+- Redo: `check()` now catches any exception while fetching/parsing (not
+  just network/JSON errors), so a malformed or unexpected fetch result
+  (e.g. `None`, wrong type) can never leak through as a false "update
+  available" message — the link is shown only when a newer version is
+  genuinely confirmed
+
+### Packaging
+
+**Why:** Running Astra meant `python src/main.py` from the exact right
+directory, and there was no declared way to install `pytest` for a fresh
+machine — both flagged in `docs/suggestions.md`.
+
+- Added `pyproject.toml` (setuptools backend) with a `[project]` section
+  and an `astra` console-script entry point (`main:main`)
+- `pip install -e ".[dev]"` installs Astra editable plus `pytest` as a dev
+  dependency in one command
+- Added `__init__.py` to every `src/` subpackage so setuptools can find
+  them as regular packages
+- Verified: `astra`, run from an unrelated working directory, correctly
+  read/wrote the real project's `config.json` and `data/` (path resolution
+  is `__file__`-relative, not cwd-relative, so this was already safe)
+- `*.egg-info/`, `build/`, `dist/` added to `.gitignore`
 
 ## Notes
 
@@ -289,7 +311,7 @@ Run the tests with: `python -m pytest`
 
 This version closes out the "Logger: file output + levels" item from
 `docs/suggestions.md` and the v0.0.8 roadmap milestone, and adds the
-Update Checker on top.
+Update Checker and the packaging/entry-point setup on top.
 
 ---
 

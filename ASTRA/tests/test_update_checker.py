@@ -32,6 +32,16 @@ def test_none_when_remote_version_is_malformed():
     assert checker.check() is None
 
 
+def test_none_when_fetch_returns_none():
+    checker = UpdateChecker("0.0.8", fetch=lambda: None)
+    assert checker.check() is None
+
+
+def test_none_when_fetch_returns_wrong_type():
+    checker = UpdateChecker("0.0.8", fetch=lambda: 8)
+    assert checker.check() is None
+
+
 def test_version_comparison_handles_different_segment_counts():
     checker = UpdateChecker("0.9", fetch=lambda: "0.10.0")
     message = checker.check()

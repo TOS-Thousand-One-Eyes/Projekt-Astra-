@@ -16,6 +16,13 @@ Core goals:
 - automate daily tasks
 - become my second brain
 
+## Setup
+
+```
+pip install -e ".[dev]"
+astra
+```
+
 ## Principles
 
 - Offline First

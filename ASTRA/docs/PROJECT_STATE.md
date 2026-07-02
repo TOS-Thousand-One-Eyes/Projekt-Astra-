@@ -22,6 +22,7 @@ ASTRA/
 │
 ├── src/
 │   ├── commands/
+│   │   ├── __init__.py
 │   │   ├── base.py
 │   │   ├── registry.py
 │   │   ├── greeting_command.py
@@ -30,17 +31,22 @@ ASTRA/
 │   │   ├── help_command.py
 │   │   └── exit_command.py
 │   ├── config/
+│   │   ├── __init__.py
 │   │   └── config.py
 │   ├── core/
+│   │   ├── __init__.py
 │   │   └── brain.py
 │   ├── memory/
+│   │   ├── __init__.py
 │   │   ├── facts.py
 │   │   ├── long_memory.py
 │   │   ├── memory_manager.py
 │   │   └── short_memory.py
 │   ├── modules/
+│   │   ├── __init__.py
 │   │   └── modules.py
 │   ├── utils/
+│   │   ├── __init__.py
 │   │   ├── logger.py
 │   │   └── update_checker.py
 │   └── main.py
@@ -56,6 +62,7 @@ ASTRA/
 │
 ├── data/            (gitignored - runtime memory files)
 ├── config.json
+├── pyproject.toml
 ├── pytest.ini
 ├── README.md
 ├── LICENSE
@@ -120,8 +127,22 @@ ASTRA/
 - Injected into `Brain` like Logger/Config/MemoryManager; `fetch` is
   injectable so tests never touch the real network.
 
+### Packaging
+- `pyproject.toml` (setuptools backend) declares the `astra` package and an
+  `astra` console entry point (`main:main`).
+- `pip install -e ".[dev]"` from the project root installs Astra in
+  editable mode plus `pytest` as a dev dependency — one command sets up a
+  fresh machine.
+- Running `astra` (instead of `python src/main.py`) works from any working
+  directory: `Config`/`MemoryManager`/`Logger` resolve their paths relative
+  to `__file__`, not the current directory, so `data/`/`config.json` are
+  always found in the real project root regardless of where `astra` is
+  invoked from.
+- Each `src/` subpackage now has an `__init__.py` so setuptools can
+  discover them as regular packages.
+
 ### Tests
-- pytest suite (56 tests) in `tests/`, configured by `pytest.ini`.
+- pytest suite (58 tests) in `tests/`, configured by `pytest.ini`.
 - Covers lifecycle transitions, commands, facts, notes, memory persistence,
   and config loading.
 - Run with: `python -m pytest`
