@@ -485,3 +485,33 @@ and startup briefing.
 
 ---
 
+# v0.0.10 - 03.07.2026
+
+## Added
+
+### Module lifecycle error handling
+
+**Why:** `Modules.start_all()`/`stop_all()` called each module's
+`start()`/`stop()` with no try/except, and `Brain.start()`/`stop()` call
+them after the state machine has already committed to `STARTING`/
+`STOPPING`. A failing module's exception used to abort the method before
+the terminal `_set_state()` call ran, permanently stranding the Brain —
+no `STARTING -> STARTING` retry or `STARTING -> STOPPING` escape exists
+in `TRANSITIONS`. Harmless while `Modules()` started empty, but exactly
+the landmine a flaky local-LLM module (see suggestions.md) would hit
+first.
+
+- `Modules.__init__` now takes a required `logger` param (mirrors
+  `UpdateChecker`'s constructor-injection style)
+- `start_all()`/`stop_all()` wrap each module's call in try/except; a
+  failing module is logged via `logger.error()` (includes the module's
+  `name`) and skipped, never propagated — the rest of the modules still
+  run and the Brain still reaches `RUNNING`/`OFFLINE`
+- Updated all 10 existing bare `Modules()` call sites across `src/main.py`,
+  `tests/conftest.py`, `tests/test_brain.py`, and `tests/test_modules.py`
+- Added a local `FailingModule(Module)` test double (mirrors the existing
+  `StubModule` convention) in both `tests/test_modules.py` and
+  `tests/test_brain.py::TestModulesLifecycle`, plus new tests proving the
+  Brain still reaches `RUNNING`/`OFFLINE` and remaining modules still run
+  when one fails
+

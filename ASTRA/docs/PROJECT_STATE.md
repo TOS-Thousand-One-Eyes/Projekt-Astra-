@@ -121,11 +121,16 @@ ASTRA/
   convention).
 - `Modules` holds a list of `Module` instances (`add_module()`,
   `list_modules()`) and drives them together via `start_all()`/`stop_all()`.
+- `Modules(logger)` requires a logger, injected the same way as
+  `UpdateChecker`. `start_all()`/`stop_all()` catch a failing module's
+  exception, log it via `logger.error()` (including the module's `name`),
+  and keep going — a broken module is skipped, never crashes the Brain or
+  strands its state machine.
 - `Brain.start()`/`stop()` call `self.modules.start_all()`/`stop_all()` as
   part of the lifecycle and always log how many modules ran, even zero.
 - No real modules exist yet (Voice/Vision/Internet from the roadmap will
-  each become one) — today `Modules()` starts empty, so this is a safe
-  no-op.
+  each become one) — today `Modules(logger)` starts empty, so this is a
+  safe no-op.
 
 ### Memory
 - MemoryManager routes to ShortMemory (session), LongMemory (persistent
@@ -186,7 +191,7 @@ ASTRA/
   discover them as regular packages.
 
 ### Tests
-- pytest suite (97 tests) in `tests/`, configured by `pytest.ini`.
+- pytest suite (105 tests) in `tests/`, configured by `pytest.ini`.
 - Covers lifecycle transitions, commands, facts, notes, memory search/
   forget, modules, session summary, startup briefing, memory persistence,
   and config loading.

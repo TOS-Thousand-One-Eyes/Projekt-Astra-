@@ -19,7 +19,7 @@ def config(tmp_path):
 
 @pytest.fixture
 def brain(config, memory):
-    return Brain(Logger(), config, memory, Modules())
+    return Brain(Logger(), config, memory, Modules(Logger()))
 
 
 @pytest.fixture

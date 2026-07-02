@@ -21,6 +21,17 @@ class StubModule(Module):
         self.stopped = True
 
 
+class FailingModule(Module):
+
+    name = "failing"
+
+    def start(self):
+        raise RuntimeError("boom")
+
+    def stop(self):
+        raise RuntimeError("boom")
+
+
 class TestLifecycle:
 
     def test_brain_starts_offline(self, brain):
@@ -67,7 +78,7 @@ class TestUpdateCheck:
                 self.checked = True
 
         update_checker = StubUpdateChecker()
-        brain = Brain(Logger(), config, memory, Modules(), update_checker=update_checker)
+        brain = Brain(Logger(), config, memory, Modules(Logger()), update_checker=update_checker)
         brain.start()
         assert update_checker.checked is True
 
@@ -78,7 +89,7 @@ class TestUpdateCheck:
 class TestModulesLifecycle:
 
     def test_start_starts_every_module(self, config, memory):
-        modules = Modules()
+        modules = Modules(Logger())
         stub = StubModule()
         modules.add_module(stub)
         brain = Brain(Logger(), config, memory, modules)
@@ -86,13 +97,37 @@ class TestModulesLifecycle:
         assert stub.started is True
 
     def test_stop_stops_every_module(self, config, memory):
-        modules = Modules()
+        modules = Modules(Logger())
         stub = StubModule()
         modules.add_module(stub)
         brain = Brain(Logger(), config, memory, modules)
         brain.start()
         brain.stop()
         assert stub.stopped is True
+
+    def test_start_reaches_running_even_if_a_module_fails(self, config, memory):
+        modules = Modules(Logger())
+        modules.add_module(FailingModule())
+        brain = Brain(Logger(), config, memory, modules)
+        brain.start()
+        assert brain.state == Brain.RUNNING
+
+    def test_stop_reaches_offline_even_if_a_module_fails(self, config, memory):
+        modules = Modules(Logger())
+        modules.add_module(FailingModule())
+        brain = Brain(Logger(), config, memory, modules)
+        brain.start()
+        brain.stop()
+        assert brain.state == Brain.OFFLINE
+
+    def test_start_all_still_starts_remaining_modules_after_one_fails(self, config, memory):
+        modules = Modules(Logger())
+        modules.add_module(FailingModule())
+        stub = StubModule()
+        modules.add_module(stub)
+        brain = Brain(Logger(), config, memory, modules)
+        brain.start()
+        assert stub.started is True
 
 
 class TestCommands:
@@ -153,7 +188,7 @@ class TestPersonalization:
 
     def test_startup_greeting_uses_known_name(self, config, memory):
         memory.learn("name", "Erik")
-        brain = Brain(Logger(), config, memory, Modules())
+        brain = Brain(Logger(), config, memory, Modules(Logger()))
         brain.start()
         assert any("Hello, Erik! I am" in entry for entry in brain.logger.get_logs())
 
@@ -240,7 +275,7 @@ class TestStartupBriefing:
 
     def test_last_seen_message_when_prior_entry_exists(self, config, memory):
         memory.long_memory.remember("previous chat")
-        brain = Brain(Logger(), config, memory, Modules())
+        brain = Brain(Logger(), config, memory, Modules(Logger()))
         brain.start()
         logs = brain.logger.get_logs()
         assert any("Last seen" in entry and "ago" in entry for entry in logs)
