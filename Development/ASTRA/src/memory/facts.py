@@ -7,7 +7,8 @@ DATA_FILE = DATA_DIR / "facts.json"
 
 class Facts:
 
-    def __init__(self):
+    def __init__(self, path=DATA_FILE):
+        self.path = Path(path)
         self.facts = {}
         self.load()
 
@@ -22,13 +23,13 @@ class Facts:
         return self.facts
 
     def save(self):
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.path, "w", encoding="utf-8") as f:
             json.dump(self.facts, f, indent=2, ensure_ascii=False)
 
     def load(self):
-        if not DATA_FILE.exists():
+        if not self.path.exists():
             self.facts = {}
             return
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
+        with open(self.path, "r", encoding="utf-8") as f:
             self.facts = json.load(f)
