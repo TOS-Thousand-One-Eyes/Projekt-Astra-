@@ -3,6 +3,18 @@ import re
 
 class Brain:
 
+    OFFLINE = "OFFLINE"
+    STARTING = "STARTING"
+    RUNNING = "RUNNING"
+    STOPPING = "STOPPING"
+
+    TRANSITIONS = {
+        OFFLINE: (STARTING,),
+        STARTING: (RUNNING,),
+        RUNNING: (STOPPING,),
+        STOPPING: (OFFLINE,),
+    }
+
     GREETINGS = {
         "hi": "Hello!",
         "hello": "Hi there!",
@@ -17,31 +29,47 @@ class Brain:
     QUERY_PATTERN = re.compile(r"^what(?:'s| is) my (.+?)\??$", re.IGNORECASE)
 
     def __init__(self, logger, config, memory, modules):
-        self.state = "OFFLINE"
+        self.state = self.OFFLINE
         self.logger = logger
         self.config = config
         self.memory = memory
         self.modules = modules
 
+    @property
+    def is_running(self):
+        return self.state == self.RUNNING
+
     def start(self):
-        self.state = "STARTING"
+        self._set_state(self.STARTING)
         self.logger.log(f"{self.config.name} v{self.config.version} is starting...")
+        self.logger.log(f"Config loaded from {self.config.path.name}.")
+        self.logger.log(
+            f"Memory loaded: {len(self.memory.recall_long())} entries, "
+            f"{len(self.memory.all_facts())} facts."
+        )
         self.logger.log(f"Hello! I am {self.config.name}.")
-        self.state = "RUNNING"
+        self._set_state(self.RUNNING)
         self.logger.log("Brain is ready.")
 
     def stop(self):
-        self.state = "STOPPING"
+        self._set_state(self.STOPPING)
         self.logger.log(f"Stopping {self.config.name}...")
-        self.state = "OFFLINE"
+        self._set_state(self.OFFLINE)
         self.logger.log(f"{self.config.name} stopped.")
 
     def receive(self, message):
+        if not self.is_running:
+            return f"{self.config.name} is not running."
+
         self.memory.remember(message)
         response = self.process(message)
         self.memory.remember(response)
         self.logger.log(f"You: {message}")
         self.logger.log(f"{self.config.name}: {response}")
+
+        if self._normalize(message) in self.FAREWELLS:
+            self.stop()
+
         return response
 
     def process(self, message):
@@ -86,6 +114,13 @@ class Brain:
             return f"Goodbye! - {self.config.name}"
 
         return f"I heard: {message}"
+
+    def _set_state(self, new_state):
+        allowed = self.TRANSITIONS[self.state]
+        if new_state not in allowed:
+            raise ValueError(f"Invalid state transition: {self.state} -> {new_state}")
+        self.logger.log(f"State: {self.state} -> {new_state}")
+        self.state = new_state
 
     def _recall_summary(self):
         entries = self.memory.recall_long()

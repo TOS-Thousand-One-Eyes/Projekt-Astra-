@@ -1,7 +1,7 @@
 # PROJECT_STATE.md
 
 # ASTRA
-Version: 0.0.2
+Version: 0.0.6
 Status: Active Development
 
 ---
@@ -17,18 +17,34 @@ ASTRA/
 │   ├── CHANGELOG.md
 │   ├── MANIFEST.md
 │   ├── PROJECT_STATE.md
-│   └── ROADMAP.md
+│   ├── ROADMAP.md
+│   └── suggestions.md
 │
 ├── src/
 │   ├── config/
+│   │   └── config.py
 │   ├── core/
 │   │   └── brain.py
 │   ├── memory/
+│   │   ├── facts.py
+│   │   ├── long_memory.py
+│   │   ├── memory_manager.py
+│   │   └── short_memory.py
 │   ├── modules/
+│   │   └── modules.py
 │   ├── utils/
 │   │   └── logger.py
 │   └── main.py
 │
+├── tests/
+│   ├── conftest.py
+│   ├── test_brain.py
+│   ├── test_config.py
+│   └── test_memory.py
+│
+├── data/            (gitignored - runtime memory files)
+├── config.json
+├── pytest.ini
 ├── README.md
 ├── LICENSE
 └── .gitignore
@@ -38,89 +54,64 @@ ASTRA/
 ## Implemented
 
 ### Brain
-- Brain class created.
-- Holds application state.
-- Uses dependency injection for Logger.
-- Controls startup flow through start().
-- greet() sends messages through Logger.
+- Holds a formal lifecycle state: OFFLINE → STARTING → RUNNING → STOPPING → OFFLINE.
+- State transitions are validated and logged; invalid transitions raise an error.
+- `is_running` property drives the main loop.
+- `receive()` refuses messages when not RUNNING.
+- Farewells (bye/exit/quit) stop the Brain through its own lifecycle.
+- Commands: greetings, facts (`my X is Y` / `what is my X`), `remember`,
+  `recall`, `facts`, `help`.
+- Uses dependency injection for Logger, Config, MemoryManager, Modules.
+
+### Config
+- Loads settings from `config.json` in the project root.
+- Missing file or missing keys fall back to `DEFAULTS` in code.
+- File path is injectable for testing.
+
+### Memory
+- MemoryManager routes to ShortMemory (session), LongMemory (persistent
+  JSON with timestamps), and Facts (persistent key/value store).
+- LongMemory → `data/long_memory.json`, Facts → `data/facts.json`.
+- All file paths are injectable so tests never touch real data.
 
 ### Logger
-- Basic Logger class implemented.
-- log(message) currently outputs to console.
-- Designed to become central logging system in future.
+- Basic Logger class: timestamps, console output, in-memory log list.
+- Designed to become the central logging system (levels + file output planned).
+
+### Tests
+- pytest suite (29 tests) in `tests/`, configured by `pytest.ini`.
+- Covers lifecycle transitions, commands, facts, notes, memory persistence,
+  and config loading.
+- Run with: `python -m pytest`
 
 ### Startup
 main.py only:
-- creates Logger
-- creates Brain
-- calls brain.start()
+- creates Logger, Config, MemoryManager, Modules
+- creates Brain and calls brain.start()
+- loops `while brain.is_running`
 
-Brain controls startup internally.
-
----
-
-## Current Startup Flow
-
-main.py
-
-↓
-
-Logger()
-
-↓
-
-Brain(logger)
-
-↓
-
-brain.start()
-
-↓
-
-running = True
-
-↓
-
-greet()
-
-↓
-
-Logger.log()
-
-↓
-
-Console Output
+Brain controls startup and shutdown internally.
 
 ---
 
 ## Design Decisions
 
-- Brain never calls print().
-- Logger is responsible for output.
+- Brain never calls print(). Logger is responsible for output.
 - main.py should stay as simple as possible.
-- Brain controls startup lifecycle.
+- Brain owns its lifecycle; nothing else changes its state directly.
 - Objects are passed through Dependency Injection.
+- File paths are injectable parameters with sensible defaults (testability).
+- New behavior gets a test.
 
 ---
 
 ## Next Planned Feature
 
-Startup System
+See `docs/suggestions.md` for the ranked list. Top candidates:
 
-Brain.start() should eventually perform:
-
-1. Greeting
-2. System Check
-3. Configuration Load
-4. Memory Load
-5. Time Check
-6. Location Check
-7. Weather
-8. Reminder Check
-9. Morning Briefing
-10. Ready State
-
-Currently only Greeting is implemented.
+1. Command registry instead of if/elif chains
+2. Input hardening (Ctrl+C, blank input)
+3. Logger levels + file output (roadmap v0.0.8)
 
 ---
 
@@ -128,10 +119,7 @@ Currently only Greeting is implemented.
 
 Logger will eventually support:
 
-- INFO
-- WARNING
-- ERROR
-- DEBUG
+- INFO / WARNING / ERROR / DEBUG
 - Console output
 - File output
 - Colored output
@@ -142,16 +130,16 @@ Logger will eventually support:
 
 Concepts already learned:
 
-- Classes
-- Objects
-- __init__()
-- self
-- Imports
-- Packages
+- Classes, Objects, __init__(), self
+- Imports, Packages
 - Dependency Injection
 - Basic Architecture
 - Logger Pattern
-- Startup Flow
+- Startup Flow / Lifecycle state machines
+- File persistence (JSON)
+- Regular expressions
+- Config with defaults fallback
+- pytest: tests, fixtures, tmp_path
 - Git workflow
 - Code Review workflow
 
@@ -164,9 +152,10 @@ For every feature:
 1. Discuss purpose
 2. Design together
 3. Implement
-4. Review
-5. Commit
-6. Update documentation
+4. Test
+5. Review
+6. Commit
+7. Update documentation
 
 ---
 

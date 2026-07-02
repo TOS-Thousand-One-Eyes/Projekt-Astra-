@@ -111,3 +111,57 @@ Long-term persistence will be implemented in future versions.
 
 ---
 
+# v0.0.6 - 02.07.2026
+
+## Added
+
+### Memory (earlier v0.0.6 commits)
+
+- Persistent LongMemory saved to `data/long_memory.json` with timestamps
+- Facts store (`my <thing> is <value>` / `what is my <thing>`) saved to `data/facts.json`
+- Basic commands: greetings, `remember`, `recall`, `facts`, `help`, farewells
+- Fixed the main loop so the conversation actually keeps running
+
+### Brain Lifecycle
+
+- Formal lifecycle states: `OFFLINE → STARTING → RUNNING → STOPPING → OFFLINE`
+- State transitions are validated — an invalid transition (e.g. starting twice)
+  raises an error instead of silently corrupting state
+- Every transition is logged (`State: OFFLINE -> STARTING`)
+- `is_running` property; the main loop now runs on `while brain.is_running`
+- `receive()` refuses messages when the Brain is not running
+- Farewells (`bye` / `exit` / `quit`) now stop the Brain through the lifecycle
+  itself — `main.py` no longer manages shutdown manually
+- Startup now reports config source and how many memories/facts were loaded
+
+### Config System
+
+- `Config` now loads from `config.json` in the project root instead of
+  hardcoding values in code
+- Missing file or missing keys fall back to safe defaults in `DEFAULTS`
+- Config file path is injectable for testing
+
+### Testing System
+
+- Introduced `pytest` with `pytest.ini` (`pythonpath = src`, `testpaths = tests`)
+- 29 tests across `tests/test_brain.py`, `tests/test_memory.py`,
+  `tests/test_config.py` covering lifecycle transitions, commands, facts,
+  notes, memory persistence, and config loading
+- Shared fixtures in `tests/conftest.py`
+- Memory classes (`LongMemory`, `Facts`, `MemoryManager`) accept injectable
+  file paths so tests never touch real `data/` files
+
+## Changed
+
+- `main.py` simplified: creates objects, starts the Brain, and loops while it
+  is running — all shutdown logic lives in the Brain now
+
+## Notes
+
+Run the tests with: `python -m pytest`
+
+This version completes the v0.0.6 "Brain Lifecycle" roadmap item and pulls
+the v0.0.7 "Config System" item forward.
+
+---
+

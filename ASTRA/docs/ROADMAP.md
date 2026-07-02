@@ -4,12 +4,12 @@ v0.0.5
 ↓
 
 v0.0.6
-🧠 Brain Lifecycle
+✅ Brain Lifecycle (+ ⚙ Config System + 🧪 pytest testy, hotovo dřív)
 
 ↓
 
 v0.0.7
-⚙ Config System
+⚙ ~~Config System~~ → volné (návrhy: docs/suggestions.md)
 
 ↓
 

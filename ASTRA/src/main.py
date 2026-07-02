@@ -15,14 +15,8 @@ def main():
 
     brain.start()
 
-    while brain.state == "RUNNING":
+    while brain.is_running:
         message = input("You: ")
-
-        if message.lower() in ("exit", "quit", "bye"):
-            brain.receive(message)
-            brain.stop()
-            break
-
         brain.receive(message)
 
 
