@@ -116,16 +116,23 @@ ASTRA/
 - `UpdateChecker` fetches `config.json`'s `version` field from the GitHub
   repo's `main` branch (a plain unauthenticated HTTPS GET — the repo is
   public) and compares it against the local version.
-- On `Brain.start()`, if a newer version is available, logs one sentence
-  with a link to the repo; otherwise stays silent.
-- Fails silently (returns `None`, logs nothing) on any network error,
-  timeout, or malformed response — Offline First is preserved, ASTRA never
-  blocks or crashes on startup without internet.
+- `UpdateChecker` gets `logger` injected (like Brain) and logs its own
+  result directly — `Brain.start()` just calls `update_checker.check()`
+  and doesn't interpret a return value.
+- Always logs an outcome, never stays silent in code: `"Astra is up to
+  date."` or the newer-version sentence with a repo link go through
+  `logger.info()`; any network error, timeout, or malformed/unexpected
+  fetch result (`None`, wrong type, bad version string) goes through
+  `logger.debug()` instead of being swallowed — Logger's own level
+  filtering (not application code) decides whether it's shown, so it's
+  silent by default at `log_level: INFO` but visible with `DEBUG`.
+- Offline First is preserved: ASTRA never blocks or crashes on startup
+  without internet, but a failed check is still a real, filterable log
+  entry rather than a discarded exception.
 - Controlled by `config.json`'s `check_for_updates` key (default `true`);
   when `false`, `main.py` never constructs an `UpdateChecker` and no
   network call happens at all.
-- Injected into `Brain` like Logger/Config/MemoryManager; `fetch` is
-  injectable so tests never touch the real network.
+- `fetch` is injectable so tests never touch the real network.
 
 ### Packaging
 - `pyproject.toml` (setuptools backend) declares the `astra` package and an

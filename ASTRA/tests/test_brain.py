@@ -42,25 +42,18 @@ class TestLifecycle:
 
 class TestUpdateCheck:
 
-    def test_logs_update_message_when_available(self, config, memory):
+    def test_start_calls_update_checker_when_present(self, config, memory):
         class StubUpdateChecker:
+            def __init__(self):
+                self.checked = False
+
             def check(self):
-                return "A newer version of Astra (v9.9.9) is available. Download it at https://example.com"
+                self.checked = True
 
-        logger = Logger()
-        brain = Brain(logger, config, memory, Modules(), update_checker=StubUpdateChecker())
+        update_checker = StubUpdateChecker()
+        brain = Brain(Logger(), config, memory, Modules(), update_checker=update_checker)
         brain.start()
-        assert any("newer version" in entry for entry in logger.get_logs())
-
-    def test_no_log_when_no_update_available(self, config, memory):
-        class StubUpdateChecker:
-            def check(self):
-                return None
-
-        logger = Logger()
-        brain = Brain(logger, config, memory, Modules(), update_checker=StubUpdateChecker())
-        brain.start()
-        assert not any("newer version" in entry for entry in logger.get_logs())
+        assert update_checker.checked is True
 
     def test_no_check_when_update_checker_is_none(self, running_brain):
         assert running_brain.update_checker is None

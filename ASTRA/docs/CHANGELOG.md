@@ -287,6 +287,15 @@ there's no network.
   (e.g. `None`, wrong type) can never leak through as a false "update
   available" message — the link is shown only when a newer version is
   genuinely confirmed
+- Redo: silence wasn't good enough — `UpdateChecker` no longer returns a
+  message for `Brain` to interpret; it now gets `logger` injected and logs
+  its own outcome directly. `"Astra is up to date."` and the newer-version
+  sentence go through `logger.info()`; any failure (network error,
+  timeout, malformed/unexpected fetch result) goes through `logger.debug()`
+  instead of being discarded in a bare `except`. Logger's own level
+  filtering — not application code — decides whether a failure is shown,
+  so it's quiet by default (`log_level: INFO`) but real and visible with
+  `log_level: DEBUG`
 
 ### Packaging
 

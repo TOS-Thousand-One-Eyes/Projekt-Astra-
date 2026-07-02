@@ -11,7 +11,7 @@ def main():
     logger = Logger(level=config.log_level, log_to_file=config.log_to_file)
     memory = MemoryManager()
     modules = Modules()
-    update_checker = UpdateChecker(config.version) if config.check_for_updates else None
+    update_checker = UpdateChecker(config.version, logger) if config.check_for_updates else None
 
     brain = Brain(logger, config, memory, modules, update_checker=update_checker)
 

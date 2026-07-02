@@ -41,9 +41,7 @@ class Brain:
         self.logger.log(f"Hello! I am {self.config.name}.")
 
         if self.update_checker:
-            update_message = self.update_checker.check()
-            if update_message:
-                self.logger.log(update_message)
+            self.update_checker.check()
 
     def stop(self):
         self._set_state(self.STOPPING)
