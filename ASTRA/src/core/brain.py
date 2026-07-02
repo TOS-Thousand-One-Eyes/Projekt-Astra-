@@ -1,8 +1,10 @@
+
 class Brain:
-    def __init__(self, logger, config):
+    def __init__(self, logger, config, memory):
         self.running = False
         self.logger = logger
         self.config = config
+        self.memory = memory
     def start(self,):
         self.running = True
         self.greet()
