@@ -19,12 +19,11 @@ def main():
         message = input("You: ")
 
         if message.lower() in ("exit", "quit", "bye"):
-            print(brain.receive(message))
+            brain.receive(message)
             brain.stop()
             break
 
-        response = brain.receive(message)
-        print(f"{config.name}: {response}")
+        brain.receive(message)
 
 
 if __name__ == "__main__":
