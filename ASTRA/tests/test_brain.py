@@ -115,3 +115,29 @@ class TestNotes:
         entries = [item["entry"] for item in running_brain.memory.recall_long()]
         assert "hi" in entries
         assert "Hello!" in entries
+
+    def test_remember_note_is_tagged_as_note(self, running_brain):
+        running_brain.receive("remember buy milk")
+        notes = [item for item in running_brain.memory.recall_long() if item["entry"] == "buy milk"]
+        assert len(notes) == 1
+        assert notes[0]["type"] == "note"
+
+    def test_forget_removes_a_note(self, running_brain):
+        running_brain.receive("remember buy milk")
+        response = running_brain.receive("forget buy milk")
+        assert "forgot" in response
+        entries = [item["entry"] for item in running_brain.memory.recall_long()]
+        assert "buy milk" not in entries
+
+    def test_forget_when_nothing_matches(self, running_brain):
+        response = running_brain.receive("forget bicycle")
+        assert "couldn't find" in response
+
+    def test_search_finds_matching_entries(self, running_brain):
+        running_brain.receive("remember buy milk")
+        response = running_brain.receive("search milk")
+        assert "buy milk" in response
+
+    def test_search_when_nothing_matches(self, running_brain):
+        response = running_brain.receive("search bicycle")
+        assert "couldn't find" in response

@@ -13,15 +13,28 @@ class LongMemory:
         self.entries = []
         self.load()
 
-    def remember(self, entry):
+    def remember(self, entry, entry_type="chat"):
         self.entries.append({
             "timestamp": datetime.now().isoformat(timespec="seconds"),
             "entry": entry,
+            "type": entry_type,
         })
         self.save()
 
     def recall(self):
         return self.entries
+
+    def search(self, query):
+        query_lower = query.lower()
+        return [item for item in self.entries if query_lower in item["entry"].lower()]
+
+    def forget(self, entry_text):
+        before = len(self.entries)
+        self.entries = [item for item in self.entries if item["entry"] != entry_text]
+        removed = before - len(self.entries)
+        if removed:
+            self.save()
+        return removed
 
     def save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)

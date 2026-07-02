@@ -53,8 +53,8 @@ class Brain:
         if not self.is_running:
             return f"{self.config.name} is not running."
 
-        self.memory.remember(message)
         result = self.commands.dispatch(message)
+        self.memory.remember(message)
         self.memory.remember(result.response)
         self.logger.log(f"You: {message}")
         self.logger.log(f"{self.config.name}: {result.response}")

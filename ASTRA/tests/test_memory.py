@@ -29,6 +29,54 @@ def test_long_memory_starts_empty_without_file(tmp_path):
     assert memory.recall() == []
 
 
+def test_long_memory_entry_type_defaults_to_chat(tmp_path):
+    memory = LongMemory(tmp_path / "long_memory.json")
+    memory.remember("hi")
+    assert memory.recall()[0]["type"] == "chat"
+
+
+def test_long_memory_entry_type_can_be_set_to_note(tmp_path):
+    memory = LongMemory(tmp_path / "long_memory.json")
+    memory.remember("buy milk", entry_type="note")
+    assert memory.recall()[0]["type"] == "note"
+
+
+def test_long_memory_search_is_case_insensitive_substring(tmp_path):
+    memory = LongMemory(tmp_path / "long_memory.json")
+    memory.remember("buy milk")
+    memory.remember("walk the dog")
+    results = memory.search("MILK")
+    assert len(results) == 1
+    assert results[0]["entry"] == "buy milk"
+
+
+def test_long_memory_search_returns_empty_list_when_no_match(tmp_path):
+    memory = LongMemory(tmp_path / "long_memory.json")
+    memory.remember("buy milk")
+    assert memory.search("bicycle") == []
+
+
+def test_long_memory_forget_removes_matching_entry_and_returns_count(tmp_path):
+    memory = LongMemory(tmp_path / "long_memory.json")
+    memory.remember("buy milk")
+    memory.remember("buy milk")
+    memory.remember("walk the dog")
+    removed = memory.forget("buy milk")
+    assert removed == 2
+    remaining = [item["entry"] for item in memory.recall()]
+    assert remaining == ["walk the dog"]
+
+    reloaded = LongMemory(tmp_path / "long_memory.json")
+    assert [item["entry"] for item in reloaded.recall()] == ["walk the dog"]
+
+
+def test_long_memory_forget_returns_zero_when_no_match(tmp_path):
+    memory = LongMemory(tmp_path / "long_memory.json")
+    memory.remember("buy milk")
+    assert memory.forget("bicycle") == 0
+    assert len(memory.recall()) == 1
+
+
 def test_facts_learn_and_get_is_case_insensitive(tmp_path):
     facts = Facts(tmp_path / "facts.json")
     facts.learn("  Name ", " Erik ")
@@ -55,3 +103,17 @@ def test_memory_manager_facts(memory):
     memory.learn("name", "Erik")
     assert memory.get_fact("name") == "Erik"
     assert memory.all_facts() == {"name": "Erik"}
+
+
+def test_memory_manager_search_long_delegates(memory):
+    memory.remember("buy milk")
+    memory.remember("walk the dog")
+    results = memory.search_long("milk")
+    assert len(results) == 1
+    assert results[0]["entry"] == "buy milk"
+
+
+def test_memory_manager_forget_delegates(memory):
+    memory.remember("buy milk")
+    assert memory.forget("buy milk") == 1
+    assert memory.recall_long() == []

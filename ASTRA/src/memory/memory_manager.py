@@ -15,15 +15,21 @@ class MemoryManager:
         self.long_memory = LongMemory(data_dir / "long_memory.json")
         self.facts = Facts(data_dir / "facts.json")
 
-    def remember(self, entry):
+    def remember(self, entry, entry_type="chat"):
         self.short_memory.remember(entry)
-        self.long_memory.remember(entry)
+        self.long_memory.remember(entry, entry_type=entry_type)
 
     def recall(self):
         return self.short_memory.recall()
 
     def recall_long(self):
         return self.long_memory.recall()
+
+    def search_long(self, query):
+        return self.long_memory.search(query)
+
+    def forget(self, entry):
+        return self.long_memory.forget(entry)
 
     def learn(self, key, value):
         self.facts.learn(key, value)

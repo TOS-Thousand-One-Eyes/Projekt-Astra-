@@ -324,3 +324,41 @@ Update Checker and the packaging/entry-point setup on top.
 
 ---
 
+# v0.0.9 - 03.07.2026
+
+## Added
+
+### Memory: search, forget, and note/transcript separation
+
+**Why:** `LongMemory` only ever grew, with no way to search it or prune a
+wrong/old entry, and every `remember <note>` was stored as an
+indistinguishable plain string alongside routine chat — flagged as the
+top item in `docs/suggestions.md`.
+
+- `LongMemory.remember(entry, entry_type="chat")` now tags every entry with
+  a `"type"` (defaults to `"chat"`, so existing callers/tests are
+  unaffected); `remember <note>` is tagged `"note"` instead
+- `LongMemory.search(query)` — case-insensitive substring search,
+  uncapped (searching is for finding one specific thing, not a recent
+  digest, unlike `recall`'s existing last-5 cap)
+- `LongMemory.forget(entry_text)` — removes entries with an exact text
+  match, persists only if something was actually removed, returns the
+  count removed
+- `MemoryManager.search_long()` / `MemoryManager.forget()` delegate through
+- `MemoryCommand` gained two new chat triggers: `search <text>` and
+  `forget <text>`, with "couldn't find anything matching" replies when
+  nothing matches
+- Fixed a real bug these tests surfaced: `Brain.receive()` used to store
+  the raw incoming message *before* dispatching it to commands, so e.g.
+  `search bicycle` would find its own just-stored input text as a false
+  match. `receive()` now dispatches first and logs the turn to memory
+  afterward, so a command only ever searches memory as it existed before
+  the current turn
+- Extended `tests/test_memory.py` and `tests/test_brain.py::TestNotes`
+
+## Notes
+
+Run the tests with: `python -m pytest`
+
+---
+

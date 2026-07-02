@@ -103,6 +103,13 @@ ASTRA/
   JSON with timestamps), and Facts (persistent key/value store).
 - LongMemory → `data/long_memory.json`, Facts → `data/facts.json`.
 - All file paths are injectable so tests never touch real data.
+- Every LongMemory entry is tagged with a `type` (`"chat"` by default,
+  `"note"` for `remember <note>`), separating routine transcript from
+  explicit notes.
+- `LongMemory.search(query)` (case-insensitive substring, uncapped) and
+  `LongMemory.forget(entry_text)` (exact match, returns count removed) are
+  exposed through `MemoryManager` and as `search <text>` / `forget <text>`
+  chat commands.
 
 ### Logger
 - Timestamps, console output, in-memory log list.
