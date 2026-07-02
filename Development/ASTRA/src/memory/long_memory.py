@@ -8,7 +8,8 @@ DATA_FILE = DATA_DIR / "long_memory.json"
 
 class LongMemory:
 
-    def __init__(self):
+    def __init__(self, path=DATA_FILE):
+        self.path = Path(path)
         self.entries = []
         self.load()
 
@@ -23,13 +24,13 @@ class LongMemory:
         return self.entries
 
     def save(self):
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.path, "w", encoding="utf-8") as f:
             json.dump(self.entries, f, indent=2, ensure_ascii=False)
 
     def load(self):
-        if not DATA_FILE.exists():
+        if not self.path.exists():
             self.entries = []
             return
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
+        with open(self.path, "r", encoding="utf-8") as f:
             self.entries = json.load(f)

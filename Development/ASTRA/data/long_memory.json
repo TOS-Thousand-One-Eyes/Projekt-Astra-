@@ -134,5 +134,69 @@
   {
     "timestamp": "2026-07-02T08:28:07",
     "entry": "I heard: Delete memory"
+  },
+  {
+    "timestamp": "2026-07-02T08:38:29",
+    "entry": "fact"
+  },
+  {
+    "timestamp": "2026-07-02T08:38:29",
+    "entry": "I heard: fact"
+  },
+  {
+    "timestamp": "2026-07-02T08:38:33",
+    "entry": "facts"
+  },
+  {
+    "timestamp": "2026-07-02T08:38:33",
+    "entry": "I heard: facts"
+  },
+  {
+    "timestamp": "2026-07-02T08:38:36",
+    "entry": "help"
+  },
+  {
+    "timestamp": "2026-07-02T08:38:36",
+    "entry": "Here's what I can do:\n- hi / hello / hey - greet me\n- how are you - ask how I'm doing\n- what is your name / who are you - ask who I am\n- remember <something> - ask me to save a note\n- recall / what do you remember - see recent memories\n- help - show this message\n- bye / exit / quit - stop the conversation"
+  },
+  {
+    "timestamp": "2026-07-02T08:38:38",
+    "entry": "bye"
+  },
+  {
+    "timestamp": "2026-07-02T08:38:38",
+    "entry": "Goodbye! - Astra"
+  },
+  {
+    "timestamp": "2026-07-02T09:03:47",
+    "entry": "ď»żhi"
+  },
+  {
+    "timestamp": "2026-07-02T09:03:47",
+    "entry": "I heard: ď»żhi"
+  },
+  {
+    "timestamp": "2026-07-02T09:03:47",
+    "entry": "my name is Erik"
+  },
+  {
+    "timestamp": "2026-07-02T09:03:47",
+    "entry": "Got it, I'll remember that your name is Erik."
+  },
+  {
+    "timestamp": "2026-07-02T09:03:47",
+    "entry": "what is my name?"
+  },
+  {
+    "timestamp": "2026-07-02T09:03:47",
+    "entry": "Your name is Erik."
+  },
+  {
+    "timestamp": "2026-07-02T09:03:47",
+    "entry": "bye"
+  },
+  {
+    "timestamp": "2026-07-02T09:03:47",
+    "entry": "Goodbye! - Astra"
   }
 ]
