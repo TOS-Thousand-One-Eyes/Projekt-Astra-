@@ -29,8 +29,9 @@ class LongMemory:
         return [item for item in self.entries if query_lower in item["entry"].lower()]
 
     def forget(self, entry_text):
+        target = entry_text.lower()
         before = len(self.entries)
-        self.entries = [item for item in self.entries if item["entry"] != entry_text]
+        self.entries = [item for item in self.entries if item["entry"].lower() != target]
         removed = before - len(self.entries)
         if removed:
             self.save()

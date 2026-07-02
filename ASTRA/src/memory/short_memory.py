@@ -9,5 +9,11 @@ class ShortMemory:
     def recall(self):
         return self.entries
 
+    def forget(self, entry_text):
+        target = entry_text.lower()
+        before = len(self.entries)
+        self.entries = [item for item in self.entries if item.lower() != target]
+        return before - len(self.entries)
+
     def clear(self):
         self.entries.clear()

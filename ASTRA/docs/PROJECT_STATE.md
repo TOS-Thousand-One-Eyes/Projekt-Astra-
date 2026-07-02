@@ -136,9 +136,10 @@ ASTRA/
   `"note"` for `remember <note>`), separating routine transcript from
   explicit notes.
 - `LongMemory.search(query)` (case-insensitive substring, uncapped) and
-  `LongMemory.forget(entry_text)` (exact match, returns count removed) are
-  exposed through `MemoryManager` and as `search <text>` / `forget <text>`
-  chat commands.
+  `LongMemory.forget(entry_text)` (case-insensitive exact match, returns
+  count removed) are exposed through `MemoryManager` and as
+  `search <text>` / `forget <text>` chat commands; `forget()` clears the
+  entry from both `LongMemory` and `ShortMemory`.
 
 ### Logger
 - Timestamps, console output, in-memory log list.
@@ -185,7 +186,7 @@ ASTRA/
   discover them as regular packages.
 
 ### Tests
-- pytest suite (91 tests) in `tests/`, configured by `pytest.ini`.
+- pytest suite (97 tests) in `tests/`, configured by `pytest.ini`.
 - Covers lifecycle transitions, commands, facts, notes, memory search/
   forget, modules, session summary, startup briefing, memory persistence,
   and config loading.

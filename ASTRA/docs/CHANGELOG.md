@@ -436,6 +436,39 @@ last session" possible with no new state.
   sessions
 - Extended `tests/test_brain.py` with `TestStartupBriefing`
 
+### Bug fixes found in a review pass
+
+**Why:** Before pushing v0.0.9, ran a multi-angle review over the six
+commits above and found four real bugs, all now fixed and covered by new
+tests:
+
+- `MemoryManager.forget()` only ever pruned `LongMemory`, never
+  `ShortMemory`, so a forgotten note's raw text could still linger in the
+  current session's short-term memory (used for the session-summary
+  message count) even though the user was told it was forgotten.
+  `ShortMemory` gained its own `forget(entry_text)` and `forget()` now
+  clears both stores.
+- `LongMemory.forget()`/`ShortMemory.forget()` required a byte-exact
+  match, while `search()` was already case-insensitive — `remember Buy
+  Milk` followed by `forget buy milk` silently failed to match. Both
+  `forget()` methods are now case-insensitive, matching `search()`.
+- `Brain._log_session_summary()`'s message count read
+  `len(self.memory.recall())` directly instead of diffing against a
+  session-start snapshot (unlike the already-correct `new_facts`
+  calculation) — restarting the same `Brain` instance without recreating
+  `MemoryManager` made the message count silently accumulate across
+  sessions instead of resetting. Added `self._messages_at_start`,
+  captured in `start()` alongside `_facts_at_start`.
+- `format_duration()` had no floor on negative durations, so a backward
+  clock adjustment (e.g. DST fall-back, manual/NTP correction) between
+  sessions could produce a nonsensical `"Last seen -900s ago."` log line.
+  Negative deltas now clamp to `0s`.
+- Also extracted two small duplicated helpers while in there:
+  `MemoryCommand._argument()` (was `message.split(" ", 1)[1].strip()`
+  repeated three times) and `_format_entries()` (shared by
+  `_recall_summary()`/`_search_summary()`), and `Brain.start()` no longer
+  calls `self.memory.all_facts()` twice.
+
 ## Changed
 
 - Bumped version to `0.0.9` in `pyproject.toml`, `config.json`, and
@@ -443,7 +476,7 @@ last session" possible with no new state.
 
 ## Notes
 
-Run the tests with: `python -m pytest` (91 tests)
+Run the tests with: `python -m pytest` (97 tests)
 
 This version closes out all six items that were pending in
 `docs/suggestions.md`: memory search/forget with note/transcript

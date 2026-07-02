@@ -217,6 +217,20 @@ class TestSessionSummary:
         assert "4 messages exchanged" in summary_lines[0]
         assert "1 new facts learned" in summary_lines[0]
 
+    def test_message_count_does_not_carry_over_between_sessions(self, brain):
+        brain.start()
+        brain.receive("hi")
+        brain.stop()
+
+        brain.start()
+        brain.receive("hey")
+        brain.stop()
+
+        summary_lines = [line for line in brain.logger.get_logs() if "Session summary" in line]
+        assert len(summary_lines) == 2
+        assert "2 messages exchanged" in summary_lines[0]
+        assert "2 messages exchanged" in summary_lines[1]
+
 
 class TestStartupBriefing:
 

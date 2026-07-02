@@ -17,3 +17,7 @@ def test_format_duration_under_a_day():
 
 def test_format_duration_a_day_or_more():
     assert format_duration(timedelta(days=2, hours=4)) == "2d 4h"
+
+
+def test_format_duration_clamps_negative_to_zero():
+    assert format_duration(timedelta(seconds=-900)) == "0s"

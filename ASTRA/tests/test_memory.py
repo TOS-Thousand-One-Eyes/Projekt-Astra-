@@ -77,6 +77,29 @@ def test_long_memory_forget_returns_zero_when_no_match(tmp_path):
     assert len(memory.recall()) == 1
 
 
+def test_long_memory_forget_is_case_insensitive(tmp_path):
+    memory = LongMemory(tmp_path / "long_memory.json")
+    memory.remember("Buy Milk")
+    assert memory.forget("buy milk") == 1
+    assert memory.recall() == []
+
+
+def test_short_memory_forget_removes_matching_entry_case_insensitively():
+    memory = ShortMemory()
+    memory.remember("Buy Milk")
+    memory.remember("walk the dog")
+    removed = memory.forget("buy milk")
+    assert removed == 1
+    assert memory.recall() == ["walk the dog"]
+
+
+def test_short_memory_forget_returns_zero_when_no_match():
+    memory = ShortMemory()
+    memory.remember("buy milk")
+    assert memory.forget("bicycle") == 0
+    assert memory.recall() == ["buy milk"]
+
+
 def test_facts_learn_and_get_is_case_insensitive(tmp_path):
     facts = Facts(tmp_path / "facts.json")
     facts.learn("  Name ", " Erik ")
@@ -117,3 +140,9 @@ def test_memory_manager_forget_delegates(memory):
     memory.remember("buy milk")
     assert memory.forget("buy milk") == 1
     assert memory.recall_long() == []
+
+
+def test_memory_manager_forget_also_clears_short_memory(memory):
+    memory.remember("buy milk")
+    memory.forget("buy milk")
+    assert memory.recall() == []

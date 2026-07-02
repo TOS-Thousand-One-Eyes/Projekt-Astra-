@@ -1,6 +1,6 @@
 def format_duration(delta):
     """Render a timedelta as a short human string, e.g. '5s', '2m 5s', '1h 3m'."""
-    total_seconds = int(delta.total_seconds())
+    total_seconds = max(0, int(delta.total_seconds()))
     if total_seconds < 60:
         return f"{total_seconds}s"
 

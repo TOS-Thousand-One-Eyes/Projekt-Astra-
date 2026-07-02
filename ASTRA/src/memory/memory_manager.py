@@ -29,7 +29,9 @@ class MemoryManager:
         return self.long_memory.search(query)
 
     def forget(self, entry):
-        return self.long_memory.forget(entry)
+        removed = self.long_memory.forget(entry)
+        self.short_memory.forget(entry)
+        return removed
 
     def learn(self, key, value):
         self.facts.learn(key, value)
