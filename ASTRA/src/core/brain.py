@@ -1,13 +1,17 @@
 class Brain:
-    def __init__(self, logger):
-        self.name = "Astra"
-        self.version = "0.0.1"
+    def __init__(self, logger, config):
         self.running = False
         self.logger = logger
-
-    def start(self):
+        self.config = config
+    def start(self,):
         self.running = True
         self.greet()
+        self.system_check()
+        self.ready()
     def greet(self):
-        self.logger.log(f"{self.name} v{self.version} is starting... (Running: {self.running})")
-        self.logger.log(f"Hello! I am {self.name}")
+        self.logger.log(f"{self.config.name} v{self.config.version} is starting... (Running: {self.running})")
+        self.logger.log(f"Hello! I am {self.config.name}")
+    def system_check(self):
+       pass
+    def ready(self):
+        pass

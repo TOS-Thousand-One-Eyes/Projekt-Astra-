@@ -1,10 +1,11 @@
+from config.config import Config
 from core.brain import Brain
 from utils.logger import Logger
 
 def main():
-   
     logger = Logger()
-    brain = Brain(logger)
+    config = Config()
+    brain = Brain(logger, config)
    
     brain.start()
 
