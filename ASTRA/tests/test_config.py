@@ -23,3 +23,17 @@ def test_partial_file_keeps_defaults(tmp_path):
     config = Config(path=path)
     assert config.name == "TestBot"
     assert config.version == DEFAULTS["version"]
+
+
+def test_log_level_and_log_to_file_defaults(tmp_path):
+    config = Config(path=tmp_path / "missing.json")
+    assert config.log_level == DEFAULTS["log_level"]
+    assert config.log_to_file == DEFAULTS["log_to_file"]
+
+
+def test_loads_log_settings_from_file(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"log_level": "DEBUG", "log_to_file": True}), encoding="utf-8")
+    config = Config(path=path)
+    assert config.log_level == "DEBUG"
+    assert config.log_to_file is True

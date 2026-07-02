@@ -14,7 +14,7 @@ v0.0.7
 ↓
 
 v0.0.8
-📝 Logger (už skutečný)
+✅ Logger (už skutečný)
 
 ↓
 

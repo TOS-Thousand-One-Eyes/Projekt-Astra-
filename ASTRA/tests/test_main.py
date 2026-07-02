@@ -38,7 +38,7 @@ class TestKeyboardInterrupt:
 
     def test_ctrl_c_stops_the_brain_cleanly(self, monkeypatch, isolated_main):
         logger = Logger()
-        monkeypatch.setattr(main_module, "Logger", lambda: logger)
+        monkeypatch.setattr(main_module, "Logger", lambda **kwargs: logger)
 
         def raise_interrupt(prompt=""):
             raise KeyboardInterrupt

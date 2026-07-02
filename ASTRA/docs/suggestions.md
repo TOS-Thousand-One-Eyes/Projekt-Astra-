@@ -6,23 +6,14 @@ Done items are kept at the bottom for history.
 
 ---
 
-## 1. Logger: file output + levels
-
-`docs/PROJECT_STATE.md` already names this as a planned feature, and the
-roadmap has it as v0.0.8. Right now `Logger` only prints and keeps an
-in-memory list. Adding `INFO/WARNING/ERROR/DEBUG` levels and optional file
-output (e.g. `data/astra.log`) will make it much easier to debug once Astra
-does more than chat. The new `config.json` is the natural place for settings
-like `log_level` and `log_to_file`.
-
-## 2. Packaging / entry point
+## 1. Packaging / entry point
 
 Add a `pyproject.toml` with a proper `[project]` section and an entry point
 script so you can run `astra` instead of `python src/main.py` and always
 from the right working directory. It would also declare `pytest` as a dev
 dependency, so a fresh machine can set up with one `pip install` command.
 
-## 3. Memory: forget/search, not just append
+## 2. Memory: forget/search, not just append
 
 `LongMemory` only grows forever right now (and every test run of the real
 app adds more). Worth adding:
@@ -32,14 +23,14 @@ app adds more). Worth adding:
   Astra to remember" (right now `remember <note>` and normal chat both land
   in the same list)
 
-## 4. Continuous Integration (GitHub Actions)
+## 3. Continuous Integration (GitHub Actions)
 
 Now that there's a test suite, a tiny GitHub Actions workflow
 (`.github/workflows/tests.yml`) that runs `python -m pytest` on every push
 would guard every future commit automatically — even ones made late at night.
 It's about 15 lines of YAML.
 
-## 5. Use facts to personalize Astra
+## 4. Use facts to personalize Astra
 
 Astra already knows `my name is Erik`, but never uses it. On startup (the
 lifecycle now reports loaded facts, so the data is right there), greet the
@@ -47,7 +38,7 @@ user by name: "Hello Erik! I am Astra." Same for responses — small touch,
 big personality payoff, and it's the first time memory feeds back into
 behavior, which is the whole point of the project.
 
-## 6. Real Modules system
+## 5. Real Modules system
 
 `Modules` is still a placeholder holding the strings `"Module1"` and
 `"Module2"`. Design the real thing: a base `Module` class with `name`,
@@ -55,14 +46,14 @@ behavior, which is the whole point of the project.
 lifecycle (the lifecycle hooks now exist for exactly this). Voice, vision,
 and internet from the roadmap would each become a module.
 
-## 7. Session summary on shutdown
+## 6. Session summary on shutdown
 
 The Brain now has a proper `STOPPING` phase — use it. On shutdown, log a
 small session summary: how many messages were exchanged, how many new facts
 were learned, session duration. Cheap to build (ShortMemory already holds
 the session), and makes the lifecycle feel alive.
 
-## 8. Startup briefing steps
+## 7. Startup briefing steps
 
 `PROJECT_STATE.md` lists the planned startup sequence (system check, time
 check, reminders, morning briefing...). The lifecycle's `STARTING` phase is
@@ -70,7 +61,7 @@ now the natural home for these. Start with the easy ones: report the current
 date/time and how long since the last session (LongMemory timestamps already
 make this possible).
 
-## 9. Local LLM as a fallback brain
+## 8. Local LLM as a fallback brain
 
 Per the "Offline First" principle: instead of `I heard: ...` for unknown
 input, a `LanguageModule` could pass the message to a local model (e.g. via
@@ -85,6 +76,12 @@ a framework wrapper is not.
 
 ## Done
 
+- ~~**Logger: file output + levels**~~ — Done in v0.0.8: `Logger` now
+  filters by level (`DEBUG < INFO < WARNING < ERROR`), gained
+  `debug()/info()/warning()/error()` convenience methods, and supports
+  optional file output to `data/astra.log`, controlled by the new
+  `log_level`/`log_to_file` keys in `config.json`; covered by
+  `tests/test_logger.py`.
 - ~~**Input handling hardening**~~ — Done in v0.0.7: Ctrl+C is caught and
   routed through `brain.stop()` for a clean lifecycle shutdown instead of a
   raw traceback; blank/whitespace-only input is skipped before it reaches

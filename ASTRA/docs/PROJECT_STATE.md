@@ -1,7 +1,7 @@
 # PROJECT_STATE.md
 
 # ASTRA
-Version: 0.0.7
+Version: 0.0.8
 Status: Active Development
 
 ---
@@ -48,6 +48,8 @@ ASTRA/
 │   ├── conftest.py
 │   ├── test_brain.py
 │   ├── test_config.py
+│   ├── test_logger.py
+│   ├── test_main.py
 │   └── test_memory.py
 │
 ├── data/            (gitignored - runtime memory files)
@@ -94,8 +96,12 @@ ASTRA/
 - All file paths are injectable so tests never touch real data.
 
 ### Logger
-- Basic Logger class: timestamps, console output, in-memory log list.
-- Designed to become the central logging system (levels + file output planned).
+- Timestamps, console output, in-memory log list.
+- Levels: `DEBUG < INFO < WARNING < ERROR`; messages below the configured
+  level are filtered out (not printed, stored, or written to file).
+- Convenience methods: `debug()`, `info()`, `warning()`, `error()`.
+- Optional file output to `data/astra.log` (path injectable for testing),
+  controlled by `config.json`'s `log_level` and `log_to_file` keys.
 
 ### Tests
 - pytest suite (29 tests) in `tests/`, configured by `pytest.ini`.
@@ -127,21 +133,7 @@ Brain controls startup and shutdown internally.
 
 ## Next Planned Feature
 
-See `docs/suggestions.md` for the ranked list. Top candidates:
-
-1. Input hardening (Ctrl+C, blank input)
-2. Logger levels + file output (roadmap v0.0.8)
-
----
-
-## Future Logger
-
-Logger will eventually support:
-
-- INFO / WARNING / ERROR / DEBUG
-- Console output
-- File output
-- Colored output
+See `docs/suggestions.md` for the ranked list.
 
 ---
 

@@ -233,3 +233,39 @@ hardening" items from `docs/suggestions.md`.
 
 ---
 
+# v0.0.8 - 02.07.2026
+
+## Added
+
+### Logger
+
+**Why:** `Logger` only printed and kept an in-memory list, with no way to
+tell routine startup noise apart from real problems, and no persistent
+record once the console scrolled away. `docs/PROJECT_STATE.md` and
+`docs/ROADMAP.md` both named levels + file output as the next planned
+Logger capability.
+
+- `Logger.log(message, level="INFO")` now filters by level
+  (`DEBUG < INFO < WARNING < ERROR`); messages below the configured level
+  are neither printed, stored, nor written to file
+- Added `debug()`, `info()`, `warning()`, `error()` convenience methods
+- Optional file output to `data/astra.log` (path is injectable, same
+  pattern as `LongMemory`/`Facts`), controlled by the new `log_to_file`
+  config key
+- `config.json` gains `log_level` (default `"INFO"`) and `log_to_file`
+  (default `false`); `main.py` now builds `Config` before `Logger` so the
+  logger can read both settings
+- All existing unlabeled `self.logger.log(message)` calls in `Brain`
+  keep working unchanged (level defaults to `"INFO"`)
+- Added `tests/test_logger.py` and extended `tests/test_config.py` to
+  cover the new behavior
+
+## Notes
+
+Run the tests with: `python -m pytest`
+
+This version closes out the "Logger: file output + levels" item from
+`docs/suggestions.md` and the v0.0.8 roadmap milestone.
+
+---
+

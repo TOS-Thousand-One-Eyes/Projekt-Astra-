@@ -6,7 +6,9 @@ CONFIG_FILE = PROJECT_ROOT / "config.json"
 
 DEFAULTS = {
     "name": "Astra",
-    "version": "0.0.7",
+    "version": "0.0.8",
+    "log_level": "INFO",
+    "log_to_file": False,
 }
 
 
@@ -18,6 +20,8 @@ class Config:
         settings.update(self._load())
         self.name = settings["name"]
         self.version = settings["version"]
+        self.log_level = settings["log_level"]
+        self.log_to_file = settings["log_to_file"]
 
     def _load(self):
         if not self.path.exists():

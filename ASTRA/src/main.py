@@ -6,8 +6,8 @@ from modules.modules import Modules
 
 
 def main():
-    logger = Logger()
     config = Config()
+    logger = Logger(level=config.log_level, log_to_file=config.log_to_file)
     memory = MemoryManager()
     modules = Modules()
 
