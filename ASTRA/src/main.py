@@ -1,11 +1,12 @@
 from core.brain import Brain
-
+from utils.logger import Logger
 
 def main():
-    brain = Brain()
+   
+    logger = Logger()
+    brain = Brain(logger)
+   
     brain.start()
-    brain.greet()
-
 
 if __name__ == "__main__":
     main()
