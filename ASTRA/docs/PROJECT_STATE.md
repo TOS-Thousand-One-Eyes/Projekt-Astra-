@@ -207,7 +207,10 @@ ASTRA/
 
 ### Continuous Integration
 - `.github/workflows/tests.yml` runs `python -m pytest` on every push and
-  pull request (Ubuntu, Python 3.14, `pip install -e ".[dev]"`).
+  pull request (Ubuntu, `pip install -e ".[dev]"`), across a matrix of
+  `python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]` (`fail-fast:
+  false`) — actually exercising `pyproject.toml`'s
+  `requires-python = ">=3.10"` claim instead of testing one version.
 
 ### Startup
 main.py only:

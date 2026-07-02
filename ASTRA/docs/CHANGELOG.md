@@ -561,3 +561,16 @@ real complexity this "do not overengineer" project doesn't need.
 - Updated `tests/test_config.py` for the removed `DEFAULTS["version"]`
   key; added two tests for the new fallback sentinel
 
+### CI now tests the full supported Python range
+
+**Why:** `pyproject.toml` declares `requires-python = ">=3.10"`, but
+`.github/workflows/tests.yml` only ever ran on `3.14` — a 3.10/3.11/
+3.12/3.13-only breakage would pass CI and ship undetected.
+
+- Added `strategy.matrix.python-version: ["3.10", "3.11", "3.12",
+  "3.13", "3.14"]`, with `fail-fast: false` so one version failing
+  doesn't cancel the others mid-run
+- No Python/test changes — the local suite runs in well under a second,
+  so the cost is almost entirely `setup-python` provisioning time per
+  job, and GitHub Actions runs the matrix in parallel
+
