@@ -6,7 +6,28 @@ Done items are kept at the bottom for history.
 
 ---
 
-## 1. Local LLM as a fallback brain
+## 1. Module lifecycle needs error handling before a real module exists
+
+`Modules.start_all()`/`stop_all()` (`src/modules/modules.py`) call each
+module's `start()`/`stop()` with no try/except, and `Brain.start()`/`stop()`
+call them mid-lifecycle, after the state has already moved to `STARTING`/
+`STOPPING`. If a module's `start()` raises, the exception aborts `start()`
+*before* `_set_state(RUNNING)` runs — the Brain is left stuck in `STARTING`
+forever, since the `TRANSITIONS` state machine has no `STARTING -> STARTING`
+retry path and no `STARTING -> STOPPING` escape either. Same problem
+symmetrically in `stop()` (a failing module strands the Brain in `STOPPING`).
+Harmless today only because the real `Modules()` starts empty — but this is
+the exact landmine waiting for suggestion #2 below, since a `LanguageModule`
+talking to Ollama is precisely the kind of subsystem that fails (model not
+pulled, server not running, network hiccup). `UpdateChecker.check()` already
+established the right pattern in this codebase (`ASTRA/src/utils/
+update_checker.py`): wrap the risky call, log the failure via `logger`, never
+let it propagate and take down the Brain. `Modules` needs the same treatment
+— likely means giving `Modules` a `logger` (injected the same way
+`UpdateChecker` is), so a broken module degrades to "logged and skipped"
+instead of bricking the assistant.
+
+## 2. Local LLM as a fallback brain
 
 Per the "Offline First" principle: instead of `I heard: ...` for unknown
 input, a `LanguageModule` could pass the message to a local model (e.g. via
@@ -16,7 +37,36 @@ goes to the model. This is the bridge from "chatbot with if-statements" to
 (`src/modules/module.py`), so a `LanguageModule` just needs to be written.
 Note: per the permanent development rules, no external AI frameworks
 (LangChain, LangGraph, etc.) before v0.1 — a direct Ollama HTTP call is fine,
-a framework wrapper is not.
+a framework wrapper is not. Do suggestion #1 first, or a flaky local model
+server will brick the Brain the first time it hiccups.
+
+## 3. Notes-only recall/search
+
+`LongMemory` entries are now tagged `"chat"` or `"note"` (v0.0.9), but
+`recall`/`search` still show both mixed together — asking to `search milk`
+after `remember buy milk` returns the note *and* the raw `remember buy milk`
+command text *and* the bot's "Got it, I'll remember..." confirmation, three
+near-duplicate hits for one real memory. Worth adding a notes-only view (e.g.
+a `notes` trigger, or filtering `recall`/`search` to `type == "note"` by
+default with an explicit way to see full chat history) now that the tagging
+exists to make it possible.
+
+## 4. Sync the version number from one place
+
+`0.0.9` currently has to be hand-edited in three files kept in sync
+manually: `pyproject.toml`, `config.json`, and `Config.DEFAULTS` in
+`src/config/config.py`. Worth having `Config` (or `main.py`) read the
+version from `pyproject.toml` (or `importlib.metadata.version("astra")`
+once installed) instead of duplicating the literal string three times —
+low urgency, but it's exactly the kind of thing that quietly drifts.
+
+## 5. CI only tests one Python version
+
+`pyproject.toml` declares `requires-python = ">=3.10"`, but
+`.github/workflows/tests.yml` only runs on `3.14`. A 3.10/3.11/3.12/3.13-only
+breakage would pass CI and ship undetected — worth a small version matrix
+(`3.10`, `3.14`) if the >=3.10 claim is meant to be real, or narrowing
+`requires-python` if 3.14+ is the actual intent.
 
 ---
 
