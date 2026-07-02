@@ -1,7 +1,7 @@
 # PROJECT_STATE.md
 
 # ASTRA
-Version: 0.0.6
+Version: 0.0.7
 Status: Active Development
 
 ---
@@ -21,6 +21,14 @@ ASTRA/
 │   └── suggestions.md
 │
 ├── src/
+│   ├── commands/
+│   │   ├── base.py
+│   │   ├── registry.py
+│   │   ├── greeting_command.py
+│   │   ├── fact_command.py
+│   │   ├── memory_command.py
+│   │   ├── help_command.py
+│   │   └── exit_command.py
 │   ├── config/
 │   │   └── config.py
 │   ├── core/
@@ -58,10 +66,21 @@ ASTRA/
 - State transitions are validated and logged; invalid transitions raise an error.
 - `is_running` property drives the main loop.
 - `receive()` refuses messages when not RUNNING.
-- Farewells (bye/exit/quit) stop the Brain through its own lifecycle.
-- Commands: greetings, facts (`my X is Y` / `what is my X`), `remember`,
-  `recall`, `facts`, `help`.
-- Uses dependency injection for Logger, Config, MemoryManager, Modules.
+- Dispatches every message to a `CommandRegistry` and only reacts to the
+  result (`response`, `stops_brain`) — it does not know about individual
+  commands or their trigger words.
+- Uses dependency injection for Logger, Config, MemoryManager, Modules,
+  and (optionally) a CommandRegistry.
+
+### Commands
+- `Command` base class: `handle(message, normalized) -> str | None`, plus
+  `help_text` and `stops_brain` metadata.
+- `CommandRegistry.dispatch()` tries each command in order, falls back to
+  the `"I heard: ..."` echo, and returns a `DispatchResult`.
+- One class per command: `GreetingCommand`, `FactCommand`, `MemoryCommand`,
+  `HelpCommand`, `ExitCommand`.
+- `build_default_registry(config, memory)` in `commands/registry.py` is the
+  single place that wires concrete commands together.
 
 ### Config
 - Loads settings from `config.json` in the project root.
@@ -99,6 +118,7 @@ Brain controls startup and shutdown internally.
 - Brain never calls print(). Logger is responsible for output.
 - main.py should stay as simple as possible.
 - Brain owns its lifecycle; nothing else changes its state directly.
+- Brain dispatches commands; it does not know individual commands.
 - Objects are passed through Dependency Injection.
 - File paths are injectable parameters with sensible defaults (testability).
 - New behavior gets a test.
@@ -109,9 +129,8 @@ Brain controls startup and shutdown internally.
 
 See `docs/suggestions.md` for the ranked list. Top candidates:
 
-1. Command registry instead of if/elif chains
-2. Input hardening (Ctrl+C, blank input)
-3. Logger levels + file output (roadmap v0.0.8)
+1. Input hardening (Ctrl+C, blank input)
+2. Logger levels + file output (roadmap v0.0.8)
 
 ---
 

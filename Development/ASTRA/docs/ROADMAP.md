@@ -9,7 +9,7 @@ v0.0.6
 ↓
 
 v0.0.7
-⚙ ~~Config System~~ → volné (návrhy: docs/suggestions.md)
+✅ Command Registry (+ 📜 Development Rules dokumentovány v MANIFEST.md)
 
 ↓
 
@@ -19,7 +19,7 @@ v0.0.8
 ↓
 
 v0.0.9
-💾 LongMemory (JSON)
+💾 LongMemory (JSON) — ✅ hotovo dřív (v rámci v0.0.6)
 
 ↓
 

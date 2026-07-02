@@ -1,0 +1,30 @@
+from commands.base import DispatchResult, normalize
+from commands.exit_command import ExitCommand
+from commands.fact_command import FactCommand
+from commands.greeting_command import GreetingCommand
+from commands.help_command import HelpCommand
+from commands.memory_command import MemoryCommand
+
+
+class CommandRegistry:
+
+    def __init__(self, commands):
+        self.commands = commands
+
+    def dispatch(self, message):
+        normalized = normalize(message)
+        for command in self.commands:
+            response = command.handle(message, normalized)
+            if response is not None:
+                return DispatchResult(response, command.stops_brain)
+        return DispatchResult(f"I heard: {message}")
+
+
+def build_default_registry(config, memory):
+    fact = FactCommand(memory)
+    note = MemoryCommand(memory)
+    greeting = GreetingCommand(config)
+    farewell = ExitCommand(config)
+    help_command = HelpCommand([fact, note, greeting, farewell])
+
+    return CommandRegistry([fact, note, help_command, greeting, farewell])
