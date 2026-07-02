@@ -7,3 +7,21 @@ So I decided to make something I never did, something from scratch while learnin
 # GOALS
 - Fully offilne
 - portable integration
+
+# DEVELOPMENT RULES
+
+These are permanent and apply to every future change, not just the current one:
+
+- Offline First
+- Desktop First
+- Modular Architecture
+- User Ownership
+- Pure Python unless explicitly approved
+- No LangChain
+- No LangGraph
+- No external AI frameworks before v0.1
+- Do not overengineer
+- Keep every commit small
+- One commit = one capability
+- Preserve backwards compatibility whenever possible
+- Do not break existing tests
