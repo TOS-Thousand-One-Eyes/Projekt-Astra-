@@ -15,9 +15,15 @@ def main():
 
     brain.start()
 
-    while brain.is_running:
-        message = input("You: ")
-        brain.receive(message)
+    try:
+        while brain.is_running:
+            message = input("You: ")
+            if not message.strip():
+                continue
+            brain.receive(message)
+    except KeyboardInterrupt:
+        print()
+        brain.stop()
 
 
 if __name__ == "__main__":

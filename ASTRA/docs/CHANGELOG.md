@@ -210,13 +210,26 @@ nothing broke.
   commands together; `Brain` imports only that factory function
 - No behavior changed: all 29 existing tests pass unmodified
 
+### Input Handling
+
+**Why:** `main.py`'s input loop had two rough edges: Ctrl+C crashed with a
+raw `KeyboardInterrupt` traceback instead of shutting down, and an empty
+Enter press was sent all the way to `Brain.receive()`, producing a useless
+"I heard: " reply and a blank entry saved to memory. Both were flagged in
+`docs/suggestions.md` as easy wins covered by the test suite.
+
+- Ctrl+C is now caught and routed through `brain.stop()`, so shutdown goes
+  through the normal lifecycle (logged, clean) instead of crashing
+- Blank/whitespace-only input is skipped before it reaches `brain.receive()`
+- Added `tests/test_main.py` covering both cases
+
 ## Notes
 
 Run the tests with: `python -m pytest`
 
 This version records the project's permanent development rules and closes
-out the "Command registry instead of if/elif chains" item from
-`docs/suggestions.md`.
+out the "Command registry instead of if/elif chains" and "Input handling
+hardening" items from `docs/suggestions.md`.
 
 ---
 
