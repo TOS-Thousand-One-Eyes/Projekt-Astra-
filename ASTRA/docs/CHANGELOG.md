@@ -6,7 +6,7 @@ The format is inspired by "Keep a Changelog".
 
 ---
 
-# v0.0.1 - 2026-07-01
+# v0.0.1 - 01.07.2026
 
 ## Added
 
@@ -72,7 +72,7 @@ The primary goal of v0.0.1 is to create a clean architecture and development wor
 
 ---
 
-# v0.0.2 - 2026-07-02
+# v0.0.2 - 02.07.2026
 
 ### Added
 - Logger class
@@ -83,3 +83,31 @@ The primary goal of v0.0.1 is to create a clean architecture and development wor
 ### Changed
 - Removed direct print() calls from Brain
 - main.py now only creates objects and starts Brain
+
+---
+
+# v0.0.3 - 0.0.4 - 02.07.2026
+
+### #&@&#&$ß$÷¤ß
+- F#*k if I know.. go look at Commit Graph lol..
+
+---
+
+# v0.0.5 - 02.07.2026
+
+## Added
+
+- Introduced MemoryManager
+- Added ShortMemory architecture
+- Added LongMemory placeholder
+- Established memory flow:
+  User → Brain → MemoryManager → ShortMemory
+- Prepared foundation for persistent memory
+
+## Notes
+
+This version introduces the memory architecture only.
+Long-term persistence will be implemented in future versions.
+
+---
+
