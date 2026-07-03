@@ -50,3 +50,11 @@ def test_two_exports_in_the_same_second_do_not_overwrite_each_other(config, memo
 
     files = list((tmp_path / "exports").glob("astra_export_*.json"))
     assert len(files) == 2
+
+
+def test_export_leaves_no_leftover_temp_file(config, memory, tmp_path):
+    export = ExportCommand(config, memory, export_dir=tmp_path / "exports")
+    export.handle("export", "export")
+
+    tmp_files = list((tmp_path / "exports").glob("*.tmp"))
+    assert tmp_files == []

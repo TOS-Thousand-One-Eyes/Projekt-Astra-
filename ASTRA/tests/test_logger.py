@@ -110,3 +110,14 @@ def test_get_logs_only_contains_entries_that_passed_filter():
     logger.log("warn", "WARNING")
     assert len(logger.get_logs()) == 1
     assert "warn" in logger.get_logs()[0]
+
+
+def test_file_write_failure_does_not_crash_the_logger(tmp_path):
+    blocker = tmp_path / "blocker"
+    blocker.write_text("not a directory", encoding="utf-8")
+    log_path = blocker / "astra.log"
+    logger = Logger(log_to_file=True, log_path=log_path)
+
+    logger.log("hello")
+
+    assert any("hello" in entry for entry in logger.get_logs())

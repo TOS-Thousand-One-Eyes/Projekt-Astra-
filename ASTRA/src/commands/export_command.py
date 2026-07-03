@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -39,7 +40,9 @@ class ExportCommand(Command):
         self.export_dir.mkdir(parents=True, exist_ok=True)
         filename = f"astra_export_{now.strftime('%Y%m%d_%H%M%S_%f')}.json"
         path = self.export_dir / filename
-        with open(path, "w", encoding="utf-8") as f:
+        tmp_path = path.with_suffix(path.suffix + ".tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, path)
 
         return f"Exported your memory and config to {path}."

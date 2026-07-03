@@ -5,8 +5,8 @@ from commands.base import Command
 
 class FactCommand(Command):
 
-    LEARN_PATTERN = re.compile(r"^(?:remember that )?my (.+?) is (.+?)[.!]?$", re.IGNORECASE)
-    QUERY_PATTERN = re.compile(r"^what(?:'s| is) my (.+?)\??$", re.IGNORECASE)
+    LEARN_PATTERN = re.compile(r"^(?:remember that )?my (.+?) is (.+?)[.!?]*$", re.IGNORECASE)
+    QUERY_PATTERN = re.compile(r"^what(?:'s| is) my (.+?)[.!?]*$", re.IGNORECASE)
     SUMMARY_TRIGGERS = ("facts", "what do you know about me", "what do you know")
 
     help_text = (

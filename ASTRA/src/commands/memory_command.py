@@ -6,6 +6,8 @@ class MemoryCommand(Command):
     RECALL_TRIGGERS = ("recall", "what do you remember")
     HISTORY_TRIGGERS = ("history",)
     STATS_TRIGGERS = ("memory stats",)
+    DEFAULT_LIMIT = 5
+    SHORT_LIMIT = 2
 
     help_text = (
         "- remember <something> - ask me to save a note\n"
@@ -54,7 +56,7 @@ class MemoryCommand(Command):
         notes = [item for item in self.memory.recall_long() if item.get("type") == "note"]
         if not notes:
             return "I don't remember anything yet."
-        return self._format_entries(notes[-5:], "Here's what I remember recently:")
+        return self._format_entries(notes[-self._entry_limit():], "Here's what I remember recently:")
 
     def _search_summary(self, query):
         matches = [item for item in self.memory.search_long(query) if item.get("type") == "note"]
@@ -66,7 +68,13 @@ class MemoryCommand(Command):
         entries = self.memory.recall_long()
         if not entries:
             return "I don't remember anything yet."
-        return self._format_entries(entries[-5:], "Here's everything recently, notes and chat:")
+        return self._format_entries(entries[-self._entry_limit():], "Here's everything recently, notes and chat:")
+
+    def _entry_limit(self):
+        preference = self.memory.get_fact("response length")
+        if isinstance(preference, str) and preference.lower() == "short":
+            return self.SHORT_LIMIT
+        return self.DEFAULT_LIMIT
 
     def _stats_summary(self):
         entries = self.memory.recall_long()
@@ -74,8 +82,8 @@ class MemoryCommand(Command):
             return "I don't have any memory yet."
         notes = [item for item in entries if item.get("type") == "note"]
         chat_count = len(entries) - len(notes)
-        oldest = entries[0]["timestamp"]
-        newest = entries[-1]["timestamp"]
+        oldest = entries[0].get("timestamp", "unknown")
+        newest = entries[-1].get("timestamp", "unknown")
         return (
             "Memory stats:\n"
             f"- total entries: {len(entries)}\n"
@@ -86,5 +94,5 @@ class MemoryCommand(Command):
         )
 
     def _format_entries(self, entries, header):
-        lines = [f"- [{item['timestamp']}] {item['entry']}" for item in entries]
+        lines = [f"- [{item.get('timestamp', 'unknown')}] {item.get('entry', '')}" for item in entries]
         return header + "\n" + "\n".join(lines)

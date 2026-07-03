@@ -69,6 +69,18 @@ def test_long_memory_search_returns_empty_list_when_no_match(tmp_path):
     assert memory.search("bicycle") == []
 
 
+def test_long_memory_search_does_not_crash_on_entry_missing_entry_key(tmp_path):
+    memory = LongMemory(tmp_path / "long_memory.json")
+    memory.entries.append({"timestamp": "2020-01-01T00:00:00", "type": "note"})
+    assert memory.search("anything") == []
+
+
+def test_long_memory_forget_does_not_crash_on_entry_missing_entry_key(tmp_path):
+    memory = LongMemory(tmp_path / "long_memory.json")
+    memory.entries.append({"timestamp": "2020-01-01T00:00:00", "type": "note"})
+    assert memory.forget("anything") == 0
+
+
 def test_long_memory_forget_removes_matching_entry_and_returns_count(tmp_path):
     memory = LongMemory(tmp_path / "long_memory.json")
     memory.remember("buy milk")

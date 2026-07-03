@@ -27,12 +27,12 @@ class LongMemory:
 
     def search(self, query):
         query_lower = query.lower()
-        return [item for item in self.entries if query_lower in item["entry"].lower()]
+        return [item for item in self.entries if query_lower in item.get("entry", "").lower()]
 
     def forget(self, entry_text):
         target = entry_text.lower()
         before = len(self.entries)
-        self.entries = [item for item in self.entries if item["entry"].lower() != target]
+        self.entries = [item for item in self.entries if item.get("entry", "").lower() != target]
         removed = before - len(self.entries)
         if removed:
             self.save()

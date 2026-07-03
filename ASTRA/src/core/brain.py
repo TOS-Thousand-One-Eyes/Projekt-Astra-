@@ -24,11 +24,11 @@ class Brain:
         self.config = config
         self.memory = memory
         self.modules = modules
-        self.commands = commands or build_default_registry(config, memory)
+        self.commands = commands if commands is not None else build_default_registry(config, memory)
         self.update_checker = update_checker
         self._session_started_at = None
         self._facts_at_start = 0
-        self._messages_at_start = 0
+        self._message_count = 0
 
     @property
     def is_running(self):
@@ -38,7 +38,7 @@ class Brain:
         self._set_state(self.STARTING)
         self._session_started_at = datetime.now()
         self._facts_at_start = len(self.memory.all_facts())
-        self._messages_at_start = len(self.memory.recall())
+        self._message_count = 0
         long_entries = self.memory.recall_long()
 
         self.logger.log(f"{self.config.name} v{self.config.version} is starting...")
@@ -78,6 +78,7 @@ class Brain:
         result = self.commands.dispatch(message)
         self.memory.remember(message)
         self.memory.remember(result.response)
+        self._message_count += 2
         self.logger.log(f"You: {message}")
         self.logger.log(f"{self.config.name}: {result.response}")
 
@@ -98,11 +99,10 @@ class Brain:
         self.logger.log(f"Last seen {ago} ago.")
 
     def _log_session_summary(self):
-        message_count = len(self.memory.recall()) - self._messages_at_start
         new_facts = len(self.memory.all_facts()) - self._facts_at_start
         duration = format_duration(datetime.now() - self._session_started_at)
         self.logger.log(
-            f"Session summary: {message_count} messages exchanged, "
+            f"Session summary: {self._message_count} messages exchanged, "
             f"{new_facts} new facts learned, session lasted {duration}."
         )
 

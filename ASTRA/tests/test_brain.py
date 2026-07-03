@@ -1,5 +1,6 @@
 import pytest
 
+from commands.registry import CommandRegistry
 from core.brain import Brain
 from modules.module import Module
 from modules.modules import Modules
@@ -65,6 +66,11 @@ class TestLifecycle:
         response = running_brain.receive("bye")
         assert "Goodbye" in response
         assert running_brain.state == Brain.OFFLINE
+
+    def test_explicit_empty_command_registry_is_not_replaced_by_default(self, config, memory):
+        empty_registry = CommandRegistry([])
+        brain = Brain(Logger(), config, memory, Modules(Logger()), commands=empty_registry)
+        assert brain.commands is empty_registry
 
 
 class TestUpdateCheck:
@@ -171,6 +177,14 @@ class TestFacts:
         response = running_brain.receive("facts")
         assert "your name is Erik" in response
 
+    def test_repeated_trailing_punctuation_is_stripped_from_learned_value(self, running_brain):
+        running_brain.receive("my mood is great!!")
+        assert running_brain.receive("what is my mood?") == "Your mood is great."
+
+    def test_repeated_trailing_punctuation_is_stripped_from_query(self, running_brain):
+        running_brain.receive("my name is Erik")
+        assert running_brain.receive("what's my name??") == "Your name is Erik."
+
 
 class TestPersonalization:
 
@@ -258,6 +272,11 @@ class TestNotes:
         response = running_brain.receive("search legacy")
         assert "couldn't find" in response
 
+    def test_history_does_not_crash_on_entries_missing_entry_or_timestamp(self, running_brain, memory):
+        memory.long_memory.entries.append({"type": "chat"})
+        response = running_brain.receive("history")
+        assert isinstance(response, str)
+
     def test_search_notes_only_excludes_chat_echo(self, running_brain):
         running_brain.receive("remember buy milk")
         response = running_brain.receive("search milk")
@@ -283,6 +302,11 @@ class TestMemoryStats:
     def test_stats_when_empty(self, running_brain):
         response = running_brain.receive("memory stats")
         assert "don't have any memory" in response
+
+    def test_stats_does_not_crash_on_entries_missing_timestamp(self, running_brain, memory):
+        memory.long_memory.entries.append({"entry": "legacy", "type": "chat"})
+        response = running_brain.receive("memory stats")
+        assert "Memory stats" in response
 
     def test_stats_reports_counts_and_timestamps(self, running_brain):
         running_brain.receive("remember buy milk")
@@ -311,6 +335,61 @@ class TestMemoryStats:
         assert "notes: 1" in response
 
 
+class TestPreferences:
+
+    def test_recall_defaults_to_last_five_notes(self, running_brain):
+        for i in range(6):
+            running_brain.receive(f"remember note {i}")
+        response = running_brain.receive("recall")
+        assert "note 5" in response
+        assert "note 1" in response
+        assert "note 0" not in response
+
+    def test_recall_shortens_with_response_length_preference(self, running_brain):
+        running_brain.receive("my response length is short")
+        for i in range(5):
+            running_brain.receive(f"remember note {i}")
+        response = running_brain.receive("recall")
+        assert "note 4" in response
+        assert "note 3" in response
+        assert "note 2" not in response
+
+    def test_history_shortens_with_response_length_preference(self, running_brain):
+        running_brain.receive("my response length is short")
+        for i in range(5):
+            running_brain.receive(f"remember note {i}")
+        response = running_brain.receive("history")
+        entry_lines = [line for line in response.splitlines() if line.startswith("- [")]
+        assert len(entry_lines) == 2
+
+    def test_response_length_preference_is_case_insensitive(self, running_brain):
+        running_brain.receive("my response length is SHORT")
+        for i in range(5):
+            running_brain.receive(f"remember note {i}")
+        response = running_brain.receive("recall")
+        assert "note 2" not in response
+
+    def test_unrecognized_response_length_value_keeps_default(self, running_brain):
+        running_brain.receive("my response length is long")
+        for i in range(5):
+            running_brain.receive(f"remember note {i}")
+        response = running_brain.receive("recall")
+        assert "note 0" in response
+
+    def test_recall_does_not_crash_on_non_string_response_length_fact(self, running_brain, memory):
+        memory.facts.facts["response length"] = True
+        running_brain.receive("remember buy milk")
+        response = running_brain.receive("recall")
+        assert "buy milk" in response
+
+    def test_repeated_trailing_punctuation_does_not_leak_into_preference_value(self, running_brain):
+        running_brain.receive("my response length is short..")
+        for i in range(5):
+            running_brain.receive(f"remember note {i}")
+        response = running_brain.receive("recall")
+        assert "note 2" not in response
+
+
 class TestSessionSummary:
 
     def test_stop_logs_session_summary_with_counts(self, running_brain):
@@ -336,6 +415,15 @@ class TestSessionSummary:
         assert len(summary_lines) == 2
         assert "2 messages exchanged" in summary_lines[0]
         assert "2 messages exchanged" in summary_lines[1]
+
+    def test_message_count_is_not_inflated_by_remembering_a_note(self, running_brain):
+        running_brain.receive("hi")
+        running_brain.receive("remember buy milk")
+        running_brain.stop()
+
+        summary_lines = [line for line in running_brain.logger.get_logs() if "Session summary" in line]
+        assert len(summary_lines) == 1
+        assert "4 messages exchanged" in summary_lines[0]
 
 
 class TestStartupBriefing:

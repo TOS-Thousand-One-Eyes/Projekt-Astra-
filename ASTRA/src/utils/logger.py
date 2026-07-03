@@ -21,9 +21,12 @@ class Logger:
         self.logs.append(entry)
         print(entry)
         if self.log_to_file:
-            self.log_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.log_path, "a", encoding="utf-8") as f:
-                f.write(entry + "\n")
+            try:
+                self.log_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(self.log_path, "a", encoding="utf-8") as f:
+                    f.write(entry + "\n")
+            except OSError:
+                pass
 
     def debug(self, message):
         self.log(message, "DEBUG")
