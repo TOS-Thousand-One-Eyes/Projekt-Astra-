@@ -25,6 +25,15 @@ def test_debug_level_lets_debug_through():
     assert any("debug message" in entry for entry in logger.get_logs())
 
 
+def test_invalid_level_falls_back_to_info_instead_of_crashing():
+    logger = Logger(level="bogus")
+    logger.log("debug message", "DEBUG")
+    logger.log("info message", "INFO")
+    logs = logger.get_logs()
+    assert not any("debug message" in entry for entry in logs)
+    assert any("info message" in entry for entry in logs)
+
+
 def test_error_level_filters_out_info_and_warning():
     logger = Logger(level="ERROR")
     logger.log("info msg", "INFO")

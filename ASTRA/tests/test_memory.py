@@ -27,6 +27,21 @@ def test_long_memory_starts_empty_without_file(tmp_path):
     assert memory.recall() == []
 
 
+def test_long_memory_falls_back_to_empty_on_corrupt_file(tmp_path):
+    path = tmp_path / "long_memory.json"
+    path.write_text("{not valid json", encoding="utf-8")
+    memory = LongMemory(path)
+    assert memory.recall() == []
+
+
+def test_long_memory_save_uses_temp_file_then_replaces_target(tmp_path):
+    path = tmp_path / "long_memory.json"
+    memory = LongMemory(path)
+    memory.remember("first entry")
+    assert not (tmp_path / "long_memory.json.tmp").exists()
+    assert path.exists()
+
+
 def test_long_memory_entry_type_defaults_to_chat(tmp_path):
     memory = LongMemory(tmp_path / "long_memory.json")
     memory.remember("hi")
@@ -112,6 +127,13 @@ def test_facts_persist_between_instances(tmp_path):
 
     reloaded = Facts(path)
     assert reloaded.all() == {"color": "blue"}
+
+
+def test_facts_falls_back_to_empty_on_corrupt_file(tmp_path):
+    path = tmp_path / "facts.json"
+    path.write_text("{not valid json", encoding="utf-8")
+    facts = Facts(path)
+    assert facts.all() == {}
 
 
 def test_memory_manager_routes_to_both_memories(memory):

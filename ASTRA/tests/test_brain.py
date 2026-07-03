@@ -204,6 +204,10 @@ class TestNotes:
         response = running_brain.receive("remember buy milk")
         assert "buy milk" in response
 
+    def test_remember_note_with_leading_whitespace(self, running_brain):
+        response = running_brain.receive(" remember buy milk")
+        assert response == "Got it, I'll remember: buy milk"
+
     def test_recall_shows_recent_entries(self, running_brain):
         running_brain.receive("remember buy milk")
         response = running_brain.receive("recall")

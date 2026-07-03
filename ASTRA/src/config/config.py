@@ -29,5 +29,8 @@ class Config:
     def _load(self):
         if not self.path.exists():
             return {}
-        with open(self.path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(self.path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return {}

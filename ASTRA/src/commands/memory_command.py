@@ -43,7 +43,7 @@ class MemoryCommand(Command):
         return None
 
     def _argument(self, message):
-        return message.split(" ", 1)[1].strip()
+        return message.strip().split(" ", 1)[1].strip()
 
     def _recall_summary(self):
         notes = [item for item in self.memory.recall_long() if item.get("type") == "note"]

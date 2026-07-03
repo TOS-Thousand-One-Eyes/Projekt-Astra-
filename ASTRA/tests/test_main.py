@@ -48,3 +48,19 @@ class TestKeyboardInterrupt:
         main_module.main()
 
         assert any("stopped" in entry for entry in logger.get_logs())
+
+
+class TestEOFError:
+
+    def test_closed_stdin_stops_the_brain_cleanly(self, monkeypatch, isolated_main):
+        logger = Logger()
+        monkeypatch.setattr(main_module, "Logger", lambda **kwargs: logger)
+
+        def raise_eof(prompt=""):
+            raise EOFError
+
+        monkeypatch.setattr(builtins, "input", raise_eof)
+
+        main_module.main()
+
+        assert any("stopped" in entry for entry in logger.get_logs())

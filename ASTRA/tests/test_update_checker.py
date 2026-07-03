@@ -72,3 +72,20 @@ def test_wrong_type_fetch_result_is_logged_at_debug_not_swallowed():
     checker = UpdateChecker("0.0.8", logger, fetch=lambda: 8)
     checker.check()
     assert any("Update check failed" in entry for entry in logger.get_logs())
+
+
+def test_unknown_local_version_is_logged_at_info_not_swallowed():
+    logger = Logger()
+    checker = UpdateChecker("0.0.0-unknown", logger, fetch=lambda: "9.9.9")
+    checker.check()
+    logs = logger.get_logs()
+    assert any("Skipping update check" in entry for entry in logs)
+
+
+def test_unknown_local_version_never_calls_fetch():
+    def fetch():
+        raise AssertionError("fetch should not be called when local version is unknown")
+
+    logger = Logger()
+    checker = UpdateChecker("0.0.0-unknown", logger, fetch=fetch)
+    checker.check()

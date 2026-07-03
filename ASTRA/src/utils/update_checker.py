@@ -21,9 +21,14 @@ class UpdateChecker:
 
     def check(self):
         try:
+            current_parsed = self._parse(self.current_version)
+        except Exception:
+            self.logger.info("Skipping update check: local version is unknown.")
+            return
+
+        try:
             latest = self.fetch()
             latest_parsed = self._parse(latest)
-            current_parsed = self._parse(self.current_version)
         except Exception as error:
             self.logger.debug(f"Update check failed: {error}")
             return

@@ -8,7 +8,7 @@ LOG_FILE = Path(__file__).resolve().parents[2] / "data" / "astra.log"
 class Logger:
 
     def __init__(self, level="INFO", log_to_file=False, log_path=LOG_FILE):
-        self.level = level
+        self.level = level if level in LEVELS else "INFO"
         self.log_to_file = log_to_file
         self.log_path = Path(log_path)
         self.logs = []

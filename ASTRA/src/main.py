@@ -23,7 +23,7 @@ def main():
             if not message.strip():
                 continue
             brain.receive(message)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, EOFError):
         print()
         brain.stop()
 

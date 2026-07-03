@@ -67,3 +67,11 @@ def test_loads_check_for_updates_from_file(tmp_path):
     path.write_text(json.dumps({"check_for_updates": False}), encoding="utf-8")
     config = Config(path=path)
     assert config.check_for_updates is False
+
+
+def test_malformed_json_falls_back_to_defaults(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text("{not valid json", encoding="utf-8")
+    config = Config(path=path)
+    assert config.name == DEFAULTS["name"]
+    assert config.version == UNKNOWN_VERSION

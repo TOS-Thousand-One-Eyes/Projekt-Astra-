@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -39,12 +40,17 @@ class LongMemory:
 
     def save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.path, "w", encoding="utf-8") as f:
+        tmp_path = self.path.with_suffix(self.path.suffix + ".tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(self.entries, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, self.path)
 
     def load(self):
         if not self.path.exists():
             self.entries = []
             return
-        with open(self.path, "r", encoding="utf-8") as f:
-            self.entries = json.load(f)
+        try:
+            with open(self.path, "r", encoding="utf-8") as f:
+                self.entries = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            self.entries = []
