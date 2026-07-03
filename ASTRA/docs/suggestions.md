@@ -24,12 +24,6 @@ deliberately deferred — small individually, but bundling six unrelated
 fixes into one commit would violate the single-capability-commit rule, so
 each needs its own pass next time this area is touched:
 
-- **`update_checker`'s version comparison breaks on differing segment
-  counts** (`utils/update_checker.py` `_parse`): Python tuple comparison
-  makes `(1, 2) < (1, 2, 0)`, so `"1.2"` vs `"1.2.0"` would spuriously
-  compare as different versions. Dormant today since the project
-  consistently uses 3-segment `x.y.z`, but no padding/normalization guard
-  exists if that ever changes.
 - **`Facts`/`LongMemory`'s atomic-write tmp path isn't unique across
   concurrent instances** (`memory/facts.py`, `memory/long_memory.py`
   `save()`): both use a fixed `path.tmp` name with no PID/UUID component.
@@ -104,6 +98,13 @@ forgotten, not because it's next.
 
 ## Done
 
+- ~~**`update_checker` version comparison breaking on differing segment
+  counts**~~ — Done (this session, deferred item 0 from the 2026-07-03
+  audit): Python tuple comparison makes `(1, 2) < (1, 2, 0)`, so `"1.2"`
+  vs `"1.2.0"` spuriously compared as an available update. `check()` now
+  zero-pads the shorter parsed tuple to the longer one's length
+  (`_pad_to_same_length()`) before comparing. Covered by new cases in
+  `tests/test_update_checker.py`.
 - ~~**Ollama `<think>` stripping eating literal text that isn't reasoning
   markup**~~ — Done (this session, deferred item 0 from the 2026-07-03
   audit): the audit said "no clean fix without structure", but there *is*

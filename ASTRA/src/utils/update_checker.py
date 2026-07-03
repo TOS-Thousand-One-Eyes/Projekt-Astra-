@@ -37,6 +37,7 @@ class UpdateChecker:
             self.logger.debug(f"Update check failed: {error}")
             return
 
+        latest_parsed, current_parsed = self._pad_to_same_length(latest_parsed, current_parsed)
         if latest_parsed > current_parsed:
             self.logger.info(
                 f"A newer version of Astra (v{latest}) is available. Download it at {self.repo_url}"
@@ -55,3 +56,13 @@ class UpdateChecker:
     @staticmethod
     def _parse(version):
         return tuple(int(part) for part in version.split("."))
+
+    @staticmethod
+    def _pad_to_same_length(first, second):
+        # Tuple comparison makes (1, 2) < (1, 2, 0), so "1.2" would look
+        # older than "1.2.0" - pad the shorter with zeros before comparing.
+        width = max(len(first), len(second))
+        return (
+            first + (0,) * (width - len(first)),
+            second + (0,) * (width - len(second)),
+        )

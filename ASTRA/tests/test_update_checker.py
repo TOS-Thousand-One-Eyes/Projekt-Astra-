@@ -32,6 +32,29 @@ def test_version_comparison_handles_different_segment_counts():
     assert any("0.10.0" in entry for entry in logger.get_logs())
 
 
+def test_short_local_version_equal_to_padded_remote_is_up_to_date():
+    logger = Logger()
+    checker = UpdateChecker("1.2", logger, fetch=lambda: "1.2.0")
+    checker.check()
+    assert any("up to date" in entry for entry in logger.get_logs())
+
+
+def test_short_remote_version_equal_to_padded_local_is_up_to_date():
+    logger = Logger()
+    checker = UpdateChecker("1.2.0", logger, fetch=lambda: "1.2")
+    checker.check()
+    assert any("up to date" in entry for entry in logger.get_logs())
+
+
+def test_short_local_version_older_than_padded_remote_reports_the_update():
+    logger = Logger()
+    checker = UpdateChecker("1.2", logger, fetch=lambda: "1.2.1")
+    checker.check()
+    logs = logger.get_logs()
+    assert any("1.2.1" in entry and checker.repo_url in entry for entry in logs)
+    assert not any("up to date" in entry for entry in logs)
+
+
 def test_fetch_error_is_logged_at_debug_not_swallowed():
     def failing_fetch():
         raise OSError("no internet")
