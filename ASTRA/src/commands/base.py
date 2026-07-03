@@ -24,7 +24,9 @@ class DispatchResult:
 
 
 def normalize(message):
-    return message.strip().lower().rstrip("?!.")
+    # Strip whitespace along with the punctuation: "bye !" must normalize
+    # to "bye", not "bye ", or every exact-trigger match misses it.
+    return message.strip().lower().rstrip("?!. \t")
 
 
 def looks_like_shell_command(message):

@@ -210,6 +210,14 @@ class TestCommands:
     def test_greeting_ignores_case_and_punctuation(self, running_brain):
         assert running_brain.receive("  Hello!  ") == "Hi there!"
 
+    def test_trigger_matches_with_a_space_before_the_punctuation(self, running_brain):
+        assert running_brain.receive("hello !") == "Hi there!"
+
+    def test_farewell_stops_the_brain_with_a_space_before_the_punctuation(self, running_brain):
+        response = running_brain.receive("bye !")
+        assert "Goodbye" in response
+        assert running_brain.state == Brain.OFFLINE
+
     def test_who_are_you(self, running_brain):
         response = running_brain.receive("who are you?")
         assert running_brain.config.name in response
