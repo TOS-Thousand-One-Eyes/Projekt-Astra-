@@ -12,45 +12,7 @@ Done items are kept at the bottom for history.
 
 ---
 
-## 1. Memory visibility (preview of roadmap v0.1.4 "Memory quality")
-
-`LongMemory` has grown, been search/forget-capable, and note/chat-tagged
-since v0.0.9-v0.0.10, but there's still no way to see its *shape* — how
-many entries, how many notes vs. chat, oldest/newest timestamp. You can't
-meaningfully plan deduplication, relevance scoring, or archiving (the full
-v0.1.4 scope) without first being able to see what's actually accumulating.
-A small `memory stats` chat trigger reporting entry counts by type and the
-oldest/newest timestamps is the cheap, obvious first step — reuses
-`LongMemory.recall()`, no new storage, no new file.
-
-## 2. Memory export (preview of roadmap v0.1.3 "Backup/restore")
-
-v0.1.3's full scope is export + import/restore. Import is the risky half
-(overwriting real data on restore) — do the safe half first. An `export`
-chat trigger that bundles `long_memory.json` + `facts.json` + `config.json`
-into one timestamped JSON file the user can back up manually. Directly
-useful right now, independent of anything else: this session alone hit two
-separate incidents of manual verification scripts accidentally polluting
-the real `data/long_memory.json` — an easy one-command snapshot before any
-risky manual testing would have made both a non-issue.
-
-## 3. A permission convention, before there's anything risky to gate
-
-Roadmap v0.1.2 is a full permission/approval system ("every action —
-internet, files, automation — has clear confirmation"). Nothing in the
-codebase does anything risky enough yet to need that machinery — the only
-network call today is `UpdateChecker`'s read-only version check, already
-gated behind `config.json`'s `check_for_updates` flag (default `true`,
-no data sent). That flag is already a tiny, working instance of the
-pattern v0.1.2 wants generalized. Worth writing down as an explicit
-convention now, before the local-LLM/internet features that will actually
-need it arrive: any future action that touches the network or writes files
-outside `data/` gets its own `config.json` boolean, defaulting to the safe
-choice, following `check_for_updates`'s precedent — a docs-only change
-(a short section in `docs/MANIFEST.md`), not code, so there's a designed
-convention to build against instead of retrofitting one later.
-
-## 4. A preference fact that actually changes behavior (preview of roadmap v0.1.1)
+## 1. A preference fact that actually changes behavior (preview of roadmap v0.1.1)
 
 v0.1.1 wants persistent communication-style/language/priority preferences.
 The existing `Facts` system (`my <thing> is <value>`) is already a
@@ -62,7 +24,7 @@ needs one more consumer. `GreetingCommand` already proved the pattern
 reuses what exists, and proves "preferences change behavior" generalizes
 beyond the one greeting case before investing in anything dedicated.
 
-## 5. Local LLM as a fallback brain
+## 2. Local LLM as a fallback brain
 
 Per the "Offline First" principle: instead of `I heard: ...` for unmatched
 input, a `LanguageModule` should pass the message to a local Ollama model.
@@ -138,11 +100,11 @@ only, same as `UpdateChecker`.
 This is a design only, not yet implemented — no `LanguageModule`,
 `OllamaClient`, or registry wiring code exists yet.
 
-## 6. TFT coaching via screen access (correctly placed: far out, two dependencies)
+## 3. TFT coaching via screen access (correctly placed: far out, two dependencies)
 
 Erik's real near-term want, raised this session: Astra watching the screen
 during a TFT match and coaching live. Honest scope check before this goes
-anywhere: it needs **both** a working local LLM (#5 above) **and** Vision
+anywhere: it needs **both** a working local LLM (#2 above) **and** Vision
 (roadmap v0.2.2 — "OCR, screenshots, basic 'what's on screen'"), neither of
 which exists yet. It's also not really an LLM-reasoning problem underneath
 — TFT patches every ~2 weeks and rotates trait/item sets every ~4 months,
@@ -153,7 +115,7 @@ Correctly sequenced this stays a v0.2.2+ idea, not something to reach for
 early — flagging it here so it's on record and roadmap-placed rather than
 forgotten, not because it's next.
 
-## 7. Deduplicate the `StubModule` test double
+## 4. Deduplicate the `StubModule` test double
 
 `tests/test_modules.py` and `tests/test_brain.py::TestModulesLifecycle`
 each define an identical local `StubModule(Module)` (`name`/`started`/
@@ -166,6 +128,16 @@ behavior change, five-minute fix whenever someone's next in that file.
 
 ## Done
 
+- ~~**Memory visibility**~~ — Done in v0.0.11: `memory stats` chat
+  trigger reports total/note/chat entry counts and oldest/newest
+  timestamps, reusing `LongMemory.recall()`; covered by
+  `tests/test_brain.py::TestMemoryStats`.
+- ~~**Memory export**~~ — Done in v0.0.11: `export` chat trigger bundles
+  `Config` settings, all facts, and the full long-term memory into a
+  timestamped JSON file under `data/exports/`; covered by
+  `tests/test_export_command.py`.
+- ~~**A permission convention**~~ — Done in v0.0.11: "PERMISSION
+  CONVENTION" section added to `docs/MANIFEST.md`, docs-only.
 - ~~**Module lifecycle needs error handling**~~ — Done in v0.0.10:
   `Modules` now takes a required `logger` (injected the same way
   `UpdateChecker` is) and `start_all()`/`stop_all()` catch a failing

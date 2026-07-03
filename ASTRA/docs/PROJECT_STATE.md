@@ -1,7 +1,7 @@
 # PROJECT_STATE.md
 
 # ASTRA
-Version: 0.0.10
+Version: 0.0.11
 Status: Active Development
 
 ---
@@ -32,6 +32,7 @@ ASTRA/
 │   │   ├── greeting_command.py
 │   │   ├── fact_command.py
 │   │   ├── memory_command.py
+│   │   ├── export_command.py
 │   │   ├── help_command.py
 │   │   └── exit_command.py
 │   ├── config/
@@ -61,6 +62,7 @@ ASTRA/
 │   ├── conftest.py
 │   ├── test_brain.py
 │   ├── test_config.py
+│   ├── test_export_command.py
 │   ├── test_logger.py
 │   ├── test_main.py
 │   ├── test_memory.py
@@ -100,18 +102,26 @@ ASTRA/
 - `Command` base class: `handle(message, normalized) -> str | None`, plus
   `help_text` and `stops_brain` metadata.
 - `CommandRegistry.dispatch()` tries each command in order, falls back to
-  the `"I heard: ..."` echo, and returns a `DispatchResult`.
+  the `"I heard: ..."` echo, and returns a `DispatchResult`. A stray shell
+  invocation pasted into the chat (e.g. `python.exe ... main.py`) gets its
+  own clearer message instead of the generic echo (`looks_like_shell_command`
+  in `commands/base.py`).
 - One class per command: `GreetingCommand`, `FactCommand`, `MemoryCommand`,
-  `HelpCommand`, `ExitCommand`.
+  `ExportCommand`, `HelpCommand`, `ExitCommand`.
 - `build_default_registry(config, memory)` in `commands/registry.py` is the
   single place that wires concrete commands together.
 - `GreetingCommand` personalizes `hi`/`hello`/`hey` with the known `name`
   fact when one has been learned (e.g. "Hello, Erik!"); `Brain.start()`'s
   own greeting log line does the same.
+- `ExportCommand` (`export` trigger) bundles `Config`'s settings, all facts,
+  and the full long-term memory into one timestamped JSON file under
+  `data/exports/` — see "Export" under Memory below.
 
 ### Config
 - Loads settings from `config.json` in the project root.
-- Missing file or missing keys fall back to `DEFAULTS` in code.
+- Missing file, missing keys, or malformed JSON all fall back to
+  `DEFAULTS` in code (a corrupt/hand-edited `config.json` no longer
+  crashes startup — it's treated the same as a missing file).
 - File path is injectable for testing.
 - `version` is the one exception: it's not in `DEFAULTS` — `config.json`
   is the sole runtime source of truth, falling back to an honest
@@ -152,12 +162,31 @@ ASTRA/
   entry from both `LongMemory` and `ShortMemory`.
 - `MemoryCommand` filters `recall`/`search` to `type == "note"` entries
   only, so chat transcript noise doesn't drown out real notes; a
-  `history` trigger shows the unfiltered last 5 entries (notes + chat).
+  `history` trigger shows the unfiltered last 5 entries (notes + chat); a
+  `memory stats` trigger reports total/note/chat counts and the
+  oldest/newest entry timestamps.
+- `LongMemory.save()`/`Facts.save()` write atomically (temp file +
+  `os.replace`) and `load()` falls back to empty state instead of
+  crashing on truncated/corrupt JSON — a mid-write crash or hand-edited
+  bad file no longer permanently bricks startup.
+
+### Export
+- `ExportCommand` (`export` trigger) bundles `Config`'s settings
+  (`name`/`version`/`log_level`/`log_to_file`/`check_for_updates`), all
+  facts, and the full `LongMemory` into one JSON file written to
+  `data/exports/astra_export_<timestamp>.json` (microsecond-precision
+  filename so two exports in the same second never overwrite each other).
+- Safe half of roadmap v0.1.3 ("Backup/restore") — a manual snapshot
+  before any risky manual testing or before an eventual import/restore
+  feature exists. `export_dir` is injectable, same convention as every
+  other data path in the codebase.
 
 ### Logger
 - Timestamps, console output, in-memory log list.
 - Levels: `DEBUG < INFO < WARNING < ERROR`; messages below the configured
   level are filtered out (not printed, stored, or written to file).
+- An invalid `log_level` (e.g. a `config.json` typo) falls back to `INFO`
+  instead of crashing on the first log call.
 - Convenience methods: `debug()`, `info()`, `warning()`, `error()`.
 - Optional file output to `data/astra.log` (path injectable for testing),
   controlled by `config.json`'s `log_level` and `log_to_file` keys.
@@ -179,6 +208,11 @@ ASTRA/
 - Offline First is preserved: ASTRA never blocks or crashes on startup
   without internet, but a failed check is still a real, filterable log
   entry rather than a discarded exception.
+- An unparseable local version (the `UNKNOWN_VERSION` sentinel, e.g. on a
+  fresh checkout with no `version` in `config.json`) is checked first and
+  logged at `info` ("Skipping update check: local version is unknown.")
+  instead of silently failing forever at an invisible `debug` level — no
+  network call is even made in that case.
 - Controlled by `config.json`'s `check_for_updates` key (default `true`);
   when `false`, `main.py` never constructs an `UpdateChecker` and no
   network call happens at all.
@@ -199,10 +233,11 @@ ASTRA/
   discover them as regular packages.
 
 ### Tests
-- pytest suite (113 tests) in `tests/`, configured by `pytest.ini`.
+- pytest suite (130 tests) in `tests/`, configured by `pytest.ini`.
 - Covers lifecycle transitions, commands, facts, notes, memory search/
-  forget, modules, session summary, startup briefing, memory persistence,
-  and config loading.
+  forget/stats, export, modules, session summary, startup briefing,
+  memory persistence (including corrupt-file fallback), and config
+  loading (including malformed-JSON fallback).
 - Run with: `python -m pytest`
 
 ### Continuous Integration
@@ -217,6 +252,10 @@ main.py only:
 - creates Logger, Config, MemoryManager, Modules
 - creates Brain and calls brain.start()
 - loops `while brain.is_running`
+- catches both `KeyboardInterrupt` (Ctrl+C) and `EOFError` (closed/piped
+  stdin) around the input loop, routing either through `brain.stop()` for
+  the same graceful shutdown — a closed pipe no longer skips module
+  shutdown and the session summary the way Ctrl+C already didn't.
 
 Brain controls startup and shutdown internally.
 

@@ -625,3 +625,119 @@ to a future session now that the Modules system it depends on is solid.
 
 ---
 
+# v0.0.11 - 03.07.2026
+
+## Fixed
+
+### A review-pass batch of real crashes and data-loss risks
+
+**Why:** A three-agent parallel audit of core/config/utils, memory, and
+commands/modules, each cross-checked against the existing test suite,
+found several currently-reproducible bugs — some capable of permanently
+destroying long-term memory or crashing the app on ordinary, non-exotic
+input.
+
+- `LongMemory`/`Facts` now save atomically (temp file + `os.replace`)
+  instead of truncating the real file in place; `load()` falls back to
+  empty state on corrupt/truncated JSON instead of crashing. Previously,
+  a crash mid-write (kill, power loss) left invalid JSON that then
+  crashed every subsequent startup permanently, with no recovery short
+  of manually deleting the file.
+- `Logger` falls back to `INFO` on an invalid `log_level` instead of
+  raising `ValueError` on the very first log call — a `config.json`
+  typo (`"WARN"`, `"info"`) used to crash startup immediately.
+- `main.py` now catches `EOFError` alongside `KeyboardInterrupt` around
+  the input loop, so closed/piped stdin gets the same graceful
+  `brain.stop()` shutdown Ctrl+C already had, instead of an unhandled
+  crash that skips module shutdown and the session summary.
+- `MemoryCommand._argument` no longer leaks the command keyword into
+  the saved note/forget-target/search-query when the raw message has
+  leading whitespace (e.g. `" remember buy milk"` used to store
+  `"remember buy milk"` instead of `"buy milk"`).
+- `UpdateChecker` now parses the local version first and, if it's the
+  `UNKNOWN_VERSION` sentinel (no `version` in `config.json`), logs a
+  clear `info`-level "skipping check" message and skips the network
+  call entirely — previously this failed silently forever at an
+  invisible `debug` level, contradicting the feature's own "always logs
+  an outcome" contract.
+- `Config._load()` now falls back to defaults on malformed `config.json`
+  instead of crashing, consistent with its existing missing-file
+  fallback.
+- 9 new regression tests across `test_memory.py`, `test_logger.py`,
+  `test_main.py`, `test_brain.py`, `test_update_checker.py`, and
+  `test_config.py`.
+
+## Added
+
+### Memory visibility: `memory stats`
+
+**Why:** `docs/suggestions.md` #1 — `LongMemory` had grown search/forget
+capability and note/chat tagging, but no way to see its *shape*. You
+can't plan deduplication or archiving (roadmap v0.1.4) without first
+knowing what's accumulating.
+
+- New `memory stats` trigger in `MemoryCommand`, reusing
+  `LongMemory.recall()` (no new storage, no new file): reports total
+  entry count, note vs. chat counts, and the oldest/newest entry
+  timestamps (relies on `LongMemory.entries` always being append-ordered
+  — confirmed true through both `remember()` and `forget()`).
+- 3 new tests in `tests/test_brain.py::TestMemoryStats`.
+
+### Memory export: `export`
+
+**Why:** `docs/suggestions.md` #2 — the safe half of roadmap v0.1.3
+("Backup/restore"); import/restore is the risky half (can overwrite
+real data) and is deliberately deferred. This session alone hit two
+separate incidents of manual verification scripts polluting the real
+`data/long_memory.json` — a one-command snapshot before risky manual
+testing would have made both a non-issue.
+
+- New `ExportCommand` (`src/commands/export_command.py`), registered in
+  `build_default_registry`. The `export` trigger bundles `Config`'s
+  settings, all facts, and the full long-term memory into one JSON file
+  written to `data/exports/astra_export_<timestamp>.json` (microsecond-
+  precision filename, so two exports in the same second don't silently
+  overwrite each other — caught and fixed in a verification pass before
+  landing).
+  `export_dir` is injectable, following the same convention as every
+  other data path in the codebase.
+- 4 new tests in `tests/test_export_command.py`, all using an injected
+  `tmp_path` so the test suite never writes into the real project's
+  `data/exports/` directory.
+
+### A written permission convention
+
+**Why:** `docs/suggestions.md` #3 — nothing in the codebase does
+anything risky enough yet to need the full permission/approval system
+planned for roadmap v0.1.2, but `check_for_updates` (gating
+`UpdateChecker`'s read-only network call) is already a tiny, working
+instance of the pattern that system wants generalized. Writing the
+convention down now, before the local-LLM/internet features already
+designed in `docs/suggestions.md` actually need it, means there's a
+designed convention to build against instead of retrofitting one later.
+
+- New "PERMISSION CONVENTION" section in `docs/MANIFEST.md`: any future
+  action touching the network or writing files outside `data/` gets its
+  own `config.json` boolean, defaulting to the safe choice, named after
+  the capability it gates, wired the same way `check_for_updates` is.
+  Docs-only — no code changes.
+
+## Changed
+
+- Bumped version to `0.0.11` in `pyproject.toml` and `config.json`.
+- Marked `docs/suggestions.md` items #1, #2, and #3 done; remaining open
+  items renumbered.
+
+## Notes
+
+Run the tests with: `python -m pytest` (130 tests)
+
+This version was built via a 3-implementer + 3-verifier parallel agent
+pass (one pair per feature), each verifier independently re-reading the
+diff, re-running the full suite, and checking the implementation against
+this project's existing conventions before anything was committed. The
+verification pass caught one real bug (the export filename collision,
+above) before it shipped.
+
+---
+
