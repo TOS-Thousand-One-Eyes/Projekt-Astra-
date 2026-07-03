@@ -26,7 +26,9 @@ class Facts:
 
     def save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = self.path.with_suffix(self.path.suffix + ".tmp")
+        # PID-unique tmp name so two Astra processes saving at once can't
+        # interleave writes into the same tmp file before os.replace runs.
+        tmp_path = self.path.with_suffix(f"{self.path.suffix}.{os.getpid()}.tmp")
         with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(self.facts, f, indent=2, ensure_ascii=False)
         os.replace(tmp_path, self.path)

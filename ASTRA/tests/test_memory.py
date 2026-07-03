@@ -298,3 +298,47 @@ def test_memory_manager_forget_with_no_matching_note_leaves_short_memory_untouch
     removed = memory.forget("test")
     assert removed == 0
     assert memory.recall() == ["test"]
+
+
+def test_long_memory_save_uses_a_process_unique_tmp_path(tmp_path, monkeypatch):
+    import os
+
+    captured = {}
+    real_replace = os.replace
+
+    def capturing_replace(src, dst):
+        captured["src"] = str(src)
+        real_replace(src, dst)
+
+    monkeypatch.setattr("memory.long_memory.os.replace", capturing_replace)
+    memory = LongMemory(tmp_path / "long_memory.json")
+    memory.remember("entry")
+
+    assert str(os.getpid()) in captured["src"]
+
+
+def test_facts_save_uses_a_process_unique_tmp_path(tmp_path, monkeypatch):
+    import os
+
+    captured = {}
+    real_replace = os.replace
+
+    def capturing_replace(src, dst):
+        captured["src"] = str(src)
+        real_replace(src, dst)
+
+    monkeypatch.setattr("memory.facts.os.replace", capturing_replace)
+    facts = Facts(tmp_path / "facts.json")
+    facts.learn("name", "Erik")
+
+    assert str(os.getpid()) in captured["src"]
+
+
+def test_save_leaves_no_tmp_files_behind(tmp_path):
+    memory = LongMemory(tmp_path / "long_memory.json")
+    memory.remember("entry")
+    facts = Facts(tmp_path / "facts.json")
+    facts.learn("name", "Erik")
+
+    leftovers = [item.name for item in tmp_path.iterdir() if ".tmp" in item.name]
+    assert leftovers == []

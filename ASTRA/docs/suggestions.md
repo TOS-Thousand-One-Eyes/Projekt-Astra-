@@ -24,13 +24,8 @@ deliberately deferred — small individually, but bundling six unrelated
 fixes into one commit would violate the single-capability-commit rule, so
 each needs its own pass next time this area is touched:
 
-- **`Facts`/`LongMemory`'s atomic-write tmp path isn't unique across
-  concurrent instances** (`memory/facts.py`, `memory/long_memory.py`
-  `save()`): both use a fixed `path.tmp` name with no PID/UUID component.
-  Two ASTRA processes writing at overlapping times could interleave writes
-  to the same tmp file before either `os.replace()` runs, corrupting or
-  losing data. Low likelihood for a single-user CLI, but a real gap if
-  ASTRA ever runs as more than one process.
+All six deferred findings above have now been fixed, each in its own
+commit — see Done below.
 
 A same-day recheck round (6 fresh agents verifying the fixes above) found
 one more concrete bug in the same area, since fixed: `MemoryManager.forget()`
@@ -98,6 +93,18 @@ forgotten, not because it's next.
 
 ## Done
 
+- ~~**`Facts`/`LongMemory` atomic-write tmp path not unique across
+  concurrent instances**~~ — Done (this session, deferred item 0 from the
+  2026-07-03 audit, the last of the six): both `save()` methods used a
+  fixed `path.tmp` name, so two Astra processes saving at overlapping
+  times could interleave writes into the same tmp file before either
+  `os.replace()` ran. The tmp name now embeds the PID
+  (`facts.json.<pid>.tmp`), keeping it deterministic per process (a
+  crashed process leaves at most one stale tmp file, overwritten on the
+  next save from the same PID). `ExportCommand` was checked and left
+  alone: its target filename is already microsecond-unique per call, so
+  its tmp name can't collide. Covered by new cases in
+  `tests/test_memory.py`.
 - ~~**`update_checker` version comparison breaking on differing segment
   counts**~~ — Done (this session, deferred item 0 from the 2026-07-03
   audit): Python tuple comparison makes `(1, 2) < (1, 2, 0)`, so `"1.2"`
