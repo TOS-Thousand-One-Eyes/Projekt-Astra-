@@ -3,13 +3,11 @@ from memory.long_memory import LongMemory
 from memory.short_memory import ShortMemory
 
 
-def test_short_memory_remember_and_clear():
+def test_short_memory_remember_and_recall():
     memory = ShortMemory()
     memory.remember("hello")
     memory.remember("world")
     assert memory.recall() == ["hello", "world"]
-    memory.clear()
-    assert memory.recall() == []
 
 
 def test_long_memory_persists_between_instances(tmp_path):

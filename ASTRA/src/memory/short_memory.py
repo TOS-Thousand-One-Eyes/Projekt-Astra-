@@ -14,6 +14,3 @@ class ShortMemory:
         before = len(self.entries)
         self.entries = [item for item in self.entries if item.lower() != target]
         return before - len(self.entries)
-
-    def clear(self):
-        self.entries.clear()

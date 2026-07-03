@@ -41,6 +41,3 @@ class MemoryManager:
 
     def all_facts(self):
         return self.facts.all()
-
-    def clear(self):
-        self.short_memory.clear()
