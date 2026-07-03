@@ -69,6 +69,12 @@ class Config:
         except json.JSONDecodeError as error:
             self.load_warnings.append(f"{self.path.name} is not valid JSON ({error}); using defaults.")
             return {}
+        except UnicodeDecodeError as error:
+            self.load_warnings.append(
+                f"{self.path.name} is not UTF-8 encoded ({error}); using defaults. "
+                f"(Was it saved as UTF-16? PowerShell's Out-File does that by default.)"
+            )
+            return {}
         except OSError as error:
             self.load_warnings.append(f"{self.path.name} could not be read ({error}); using defaults.")
             return {}

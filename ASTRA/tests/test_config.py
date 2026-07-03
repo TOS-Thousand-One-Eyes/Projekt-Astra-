@@ -186,3 +186,11 @@ def test_non_string_name_keeps_the_default_and_warns(tmp_path):
     config = Config(path=path)
     assert config.name == DEFAULTS["name"]
     assert any('"name"' in warning for warning in config.load_warnings)
+
+
+def test_non_utf8_config_file_falls_back_to_defaults_with_a_warning(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_bytes('{"name": "TestBot", "version": "1.0.0"}'.encode("utf-16"))
+    config = Config(path=path)
+    assert config.name == DEFAULTS["name"]
+    assert any("UTF-8" in warning for warning in config.load_warnings)
