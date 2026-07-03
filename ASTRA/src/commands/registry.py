@@ -1,5 +1,6 @@
 from commands.base import DispatchResult, looks_like_shell_command, normalize
 from commands.exit_command import ExitCommand
+from commands.export_command import ExportCommand
 from commands.fact_command import FactCommand
 from commands.greeting_command import GreetingCommand
 from commands.help_command import HelpCommand
@@ -27,6 +28,7 @@ def build_default_registry(config, memory):
     note = MemoryCommand(memory)
     greeting = GreetingCommand(config, memory)
     farewell = ExitCommand(config)
-    help_command = HelpCommand([fact, note, greeting, farewell])
+    export = ExportCommand(config, memory)
+    help_command = HelpCommand([fact, note, greeting, farewell, export])
 
-    return CommandRegistry([fact, note, help_command, greeting, farewell])
+    return CommandRegistry([fact, note, help_command, greeting, farewell, export])
