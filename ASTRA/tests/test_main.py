@@ -50,6 +50,17 @@ class TestKeyboardInterrupt:
         assert any("stopped" in entry for entry in logger.get_logs())
 
 
+class TestStartupInterrupt:
+
+    def test_ctrl_c_during_startup_exits_cleanly_without_a_traceback(self, monkeypatch, isolated_main):
+        def interrupted_start(self):
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(main_module.Brain, "start", interrupted_start)
+
+        main_module.main()
+
+
 class TestEOFError:
 
     def test_closed_stdin_stops_the_brain_cleanly(self, monkeypatch, isolated_main):

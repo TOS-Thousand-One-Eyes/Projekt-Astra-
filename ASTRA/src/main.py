@@ -26,9 +26,8 @@ def main():
 
     brain = Brain(logger, config, memory, modules, update_checker=update_checker)
 
-    brain.start()
-
     try:
+        brain.start()
         while brain.is_running:
             message = input("You: ")
             if not message.strip():
@@ -36,7 +35,10 @@ def main():
             brain.receive(message)
     except (KeyboardInterrupt, EOFError):
         print()
-        brain.stop()
+        # A Ctrl+C during startup (e.g. mid update-check) lands here before
+        # the brain ever reached RUNNING - nothing to stop in that case.
+        if brain.is_running:
+            brain.stop()
 
 
 if __name__ == "__main__":
