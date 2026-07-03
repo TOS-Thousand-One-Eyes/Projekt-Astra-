@@ -1,7 +1,7 @@
 # PROJECT_STATE.md
 
 # ASTRA
-Version: 0.0.11
+Version: 0.0.12
 Status: Active Development
 
 ---
@@ -49,11 +49,13 @@ ASTRA/
 │   │   └── short_memory.py
 │   ├── modules/
 │   │   ├── __init__.py
+│   │   ├── language_module.py
 │   │   ├── module.py
 │   │   └── modules.py
 │   ├── utils/
 │   │   ├── __init__.py
 │   │   ├── logger.py
+│   │   ├── ollama_client.py
 │   │   ├── time_format.py
 │   │   └── update_checker.py
 │   └── main.py
@@ -67,6 +69,7 @@ ASTRA/
 │   ├── test_main.py
 │   ├── test_memory.py
 │   ├── test_modules.py
+│   ├── test_ollama_client.py
 │   ├── test_time_format.py
 │   └── test_update_checker.py
 │
@@ -102,14 +105,16 @@ ASTRA/
 - `Command` base class: `handle(message, normalized) -> str | None`, plus
   `help_text` and `stops_brain` metadata.
 - `CommandRegistry.dispatch()` tries each command in order, falls back to
-  the `"I heard: ..."` echo, and returns a `DispatchResult`. A stray shell
-  invocation pasted into the chat (e.g. `python.exe ... main.py`) gets its
-  own clearer message instead of the generic echo (`looks_like_shell_command`
-  in `commands/base.py`).
+  a local `LanguageModule` when one is available, and finally to the
+  `"I heard: ..."` echo; it returns a `DispatchResult`. A stray shell
+  invocation pasted into the chat (e.g. `python.exe ... main.py`) still gets
+  its own clearer message instead of going to the generic echo or local LLM
+  (`looks_like_shell_command` in `commands/base.py`).
 - One class per command: `GreetingCommand`, `FactCommand`, `MemoryCommand`,
   `ExportCommand`, `HelpCommand`, `ExitCommand`.
-- `build_default_registry(config, memory)` in `commands/registry.py` is the
-  single place that wires concrete commands together.
+- `build_default_registry(config, memory, language_module=None)` in
+  `commands/registry.py` is the single place that wires concrete commands
+  together, including the optional local-language fallback.
 - `GreetingCommand` personalizes `hi`/`hello`/`hey` with the known `name`
   fact when one has been learned (e.g. "Hello, Erik!"); `Brain.start()`'s
   own greeting log line does the same.
@@ -128,6 +133,10 @@ ASTRA/
   `UNKNOWN_VERSION = "0.0.0-unknown"` sentinel if the key is missing. See
   the "RELEASE CHECKLIST" in `docs/MANIFEST.md` for how the version is
   kept in sync with `pyproject.toml` (by hand, not by code).
+- Local-language fallback is gated by `use_language_fallback` (default
+  `false` per the permission convention) plus `language_base_url` and
+  `language_model` settings; `main.py` only constructs the fallback module
+  when the flag is enabled.
 
 ### Modules
 - `Module` (`src/modules/module.py`) is the base class for a Brain-managed
@@ -143,9 +152,10 @@ ASTRA/
   strands its state machine.
 - `Brain.start()`/`stop()` call `self.modules.start_all()`/`stop_all()` as
   part of the lifecycle and always log how many modules ran, even zero.
-- No real modules exist yet (Voice/Vision/Internet from the roadmap will
-  each become one) — today `Modules(logger)` starts empty, so this is a
-  safe no-op.
+- `LanguageModule` (`src/modules/language_module.py`) is the first real
+  optional subsystem: it wraps a local `OllamaClient`, preflights model
+  availability on `start()`, tracks an `available` flag, and safely degrades
+  back to the old echo behavior if startup or generation fails.
 
 ### Memory
 - MemoryManager routes to ShortMemory (session), LongMemory (persistent
@@ -163,8 +173,9 @@ ASTRA/
 - `MemoryCommand` filters `recall`/`search` to `type == "note"` entries
   only, so chat transcript noise doesn't drown out real notes; a
   `history` trigger shows the unfiltered last 5 entries (notes + chat); a
-  `memory stats` trigger reports total/note/chat counts and the
-  oldest/newest entry timestamps.
+  learned `response length = short` fact lowers `history`/`recall` to the
+  last 3 entries instead; a `memory stats` trigger reports total/note/chat
+  counts and the oldest/newest entry timestamps.
 - `LongMemory.save()`/`Facts.save()` write atomically (temp file +
   `os.replace`) and `load()` falls back to empty state instead of
   crashing on truncated/corrupt JSON — a mid-write crash or hand-edited
@@ -233,11 +244,12 @@ ASTRA/
   discover them as regular packages.
 
 ### Tests
-- pytest suite (130 tests) in `tests/`, configured by `pytest.ini`.
+- pytest suite (143 tests) in `tests/`, configured by `pytest.ini`.
 - Covers lifecycle transitions, commands, facts, notes, memory search/
-  forget/stats, export, modules, session summary, startup briefing,
-  memory persistence (including corrupt-file fallback), and config
-  loading (including malformed-JSON fallback).
+  forget/stats, export, preference-backed output length, modules, local
+  Ollama fallback, session summary, startup briefing, memory persistence
+  (including corrupt-file fallback), and config loading (including malformed-
+  JSON fallback).
 - Run with: `python -m pytest`
 
 ### Continuous Integration
@@ -250,6 +262,8 @@ ASTRA/
 ### Startup
 main.py only:
 - creates Logger, Config, MemoryManager, Modules
+- conditionally adds `LanguageModule(OllamaClient(...))` when
+  `config.use_language_fallback` is enabled
 - creates Brain and calls brain.start()
 - loops `while brain.is_running`
 - catches both `KeyboardInterrupt` (Ctrl+C) and `EOFError` (closed/piped

@@ -1,23 +1,10 @@
 import pytest
 
+from conftest import StubModule
+from modules.language_module import LanguageModule
 from modules.module import Module
 from modules.modules import Modules
 from utils.logger import Logger
-
-
-class StubModule(Module):
-
-    name = "stub"
-
-    def __init__(self):
-        self.started = False
-        self.stopped = False
-
-    def start(self):
-        self.started = True
-
-    def stop(self):
-        self.stopped = True
 
 
 class FailingModule(Module):
@@ -111,3 +98,39 @@ def test_stop_all_logs_the_failing_modules_name():
     modules.stop_all()
     logs = logger.get_logs()
     assert any("failing" in entry and "ERROR" in entry for entry in logs)
+
+
+def test_language_module_start_marks_it_available():
+    class StubClient:
+        def ensure_available(self):
+            return None
+
+    module = LanguageModule(StubClient())
+    module.start()
+    assert module.available is True
+
+
+def test_language_module_start_raises_clear_error_when_ollama_is_unreachable():
+    class StubClient:
+        def ensure_available(self):
+            raise OSError("connection refused")
+
+    module = LanguageModule(StubClient())
+
+    with pytest.raises(ConnectionError, match="Ollama not reachable"):
+        module.start()
+
+
+def test_language_module_runtime_failure_disables_it_and_returns_none():
+    class StubClient:
+        def ensure_available(self):
+            return None
+
+        def generate(self, prompt):
+            raise OSError("connection dropped")
+
+    module = LanguageModule(StubClient())
+    module.start()
+
+    assert module.respond("hello") is None
+    assert module.available is False

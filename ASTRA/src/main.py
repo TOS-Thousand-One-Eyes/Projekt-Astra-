@@ -1,9 +1,11 @@
 from config.config import Config
 from core.brain import Brain
-from utils.logger import Logger
-from utils.update_checker import UpdateChecker
 from memory.memory_manager import MemoryManager
+from modules.language_module import LanguageModule
 from modules.modules import Modules
+from utils.logger import Logger
+from utils.ollama_client import OllamaClient
+from utils.update_checker import UpdateChecker
 
 
 def main():
@@ -11,6 +13,11 @@ def main():
     logger = Logger(level=config.log_level, log_to_file=config.log_to_file)
     memory = MemoryManager()
     modules = Modules(logger)
+
+    if config.use_language_fallback:
+        language_client = OllamaClient(config.language_base_url, config.language_model)
+        modules.add_module(LanguageModule(language_client))
+
     update_checker = UpdateChecker(config.version, logger) if config.check_for_updates else None
 
     brain = Brain(logger, config, memory, modules, update_checker=update_checker)

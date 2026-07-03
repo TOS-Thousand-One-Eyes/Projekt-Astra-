@@ -3,8 +3,24 @@ import pytest
 from config.config import Config
 from core.brain import Brain
 from memory.memory_manager import MemoryManager
+from modules.module import Module
 from modules.modules import Modules
 from utils.logger import Logger
+
+
+class StubModule(Module):
+
+    name = "stub"
+
+    def __init__(self):
+        self.started = False
+        self.stopped = False
+
+    def start(self):
+        self.started = True
+
+    def stop(self):
+        self.stopped = True
 
 
 @pytest.fixture

@@ -1,25 +1,11 @@
 import pytest
 
+from conftest import StubModule
 from core.brain import Brain
+from modules.language_module import LanguageModule
 from modules.module import Module
 from modules.modules import Modules
 from utils.logger import Logger
-
-
-class StubModule(Module):
-
-    name = "stub"
-
-    def __init__(self):
-        self.started = False
-        self.stopped = False
-
-    def start(self):
-        self.started = True
-
-    def stop(self):
-        self.stopped = True
-
 
 class FailingModule(Module):
 
@@ -150,6 +136,36 @@ class TestCommands:
     def test_unknown_message_is_echoed(self, running_brain):
         assert running_brain.receive("something random") == "I heard: something random"
 
+    def test_unknown_message_uses_language_module_when_available(self, config, memory):
+        class StubClient:
+            def ensure_available(self):
+                return None
+
+            def generate(self, prompt):
+                return f"Local reply: {prompt}"
+
+        modules = Modules(Logger())
+        modules.add_module(LanguageModule(StubClient()))
+        brain = Brain(Logger(), config, memory, modules)
+        brain.start()
+
+        assert brain.receive("something random") == "Local reply: something random"
+
+    def test_unknown_message_falls_back_to_echo_when_language_module_runtime_fails(self, config, memory):
+        class StubClient:
+            def ensure_available(self):
+                return None
+
+            def generate(self, prompt):
+                raise OSError("connection dropped")
+
+        modules = Modules(Logger())
+        modules.add_module(LanguageModule(StubClient()))
+        brain = Brain(Logger(), config, memory, modules)
+        brain.start()
+
+        assert brain.receive("something random") == "I heard: something random"
+
     def test_stray_shell_command_is_not_echoed(self, running_brain):
         response = running_brain.receive(r"C:\Python\python.exe c:/Development/ASTRA/src/main.py")
         assert "I heard" not in response
@@ -253,6 +269,18 @@ class TestNotes:
         response = running_brain.receive("recall")
         assert "don't remember anything" in response
 
+    def test_recall_respects_short_response_length_preference(self, running_brain):
+        for item in ("one", "two", "three", "four"):
+            running_brain.receive(f"remember {item}")
+
+        running_brain.receive("my response length is short")
+        response = running_brain.receive("recall")
+
+        assert "one" not in response
+        assert "two" in response
+        assert "three" in response
+        assert "four" in response
+
     def test_search_does_not_crash_on_legacy_entries_without_type(self, running_brain, memory):
         memory.long_memory.entries.append({"timestamp": "2020-01-01T00:00:00", "entry": "legacy chat"})
         response = running_brain.receive("search legacy")
@@ -276,6 +304,18 @@ class TestNotes:
         running_brain.receive("remember buy milk")
         response = running_brain.receive("history")
         assert "remember buy milk" in response
+
+    def test_history_respects_short_response_length_preference(self, brain):
+        for entry in ("first", "second", "third", "fourth"):
+            brain.memory.remember(entry)
+
+        brain.memory.learn("response length", "short")
+        response = brain.process("history")
+
+        assert "first" not in response
+        assert "second" in response
+        assert "third" in response
+        assert "fourth" in response
 
 
 class TestMemoryStats:

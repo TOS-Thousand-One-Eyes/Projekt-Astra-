@@ -24,7 +24,11 @@ class Brain:
         self.config = config
         self.memory = memory
         self.modules = modules
-        self.commands = commands or build_default_registry(config, memory)
+        self.commands = commands or build_default_registry(
+            config,
+            memory,
+            language_module=self._language_module(),
+        )
         self.update_checker = update_checker
         self._session_started_at = None
         self._facts_at_start = 0
@@ -105,6 +109,12 @@ class Brain:
             f"Session summary: {message_count} messages exchanged, "
             f"{new_facts} new facts learned, session lasted {duration}."
         )
+
+    def _language_module(self):
+        for module in self.modules.list_modules():
+            if getattr(module, "name", None) == "language":
+                return module
+        return None
 
     def _set_state(self, new_state):
         allowed = self.TRANSITIONS[self.state]

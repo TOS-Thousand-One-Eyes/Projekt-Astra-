@@ -3,6 +3,8 @@ from commands.base import Command
 
 class MemoryCommand(Command):
 
+    DEFAULT_ENTRY_LIMIT = 5
+    SHORT_ENTRY_LIMIT = 3
     RECALL_TRIGGERS = ("recall", "what do you remember")
     HISTORY_TRIGGERS = ("history",)
     STATS_TRIGGERS = ("memory stats",)
@@ -54,7 +56,7 @@ class MemoryCommand(Command):
         notes = [item for item in self.memory.recall_long() if item.get("type") == "note"]
         if not notes:
             return "I don't remember anything yet."
-        return self._format_entries(notes[-5:], "Here's what I remember recently:")
+        return self._format_entries(notes[-self._entry_limit():], "Here's what I remember recently:")
 
     def _search_summary(self, query):
         matches = [item for item in self.memory.search_long(query) if item.get("type") == "note"]
@@ -66,7 +68,7 @@ class MemoryCommand(Command):
         entries = self.memory.recall_long()
         if not entries:
             return "I don't remember anything yet."
-        return self._format_entries(entries[-5:], "Here's everything recently, notes and chat:")
+        return self._format_entries(entries[-self._entry_limit():], "Here's everything recently, notes and chat:")
 
     def _stats_summary(self):
         entries = self.memory.recall_long()
@@ -88,3 +90,9 @@ class MemoryCommand(Command):
     def _format_entries(self, entries, header):
         lines = [f"- [{item['timestamp']}] {item['entry']}" for item in entries]
         return header + "\n" + "\n".join(lines)
+
+    def _entry_limit(self):
+        preference = self.memory.get_fact("response length")
+        if isinstance(preference, str) and preference.strip().lower() == "short":
+            return self.SHORT_ENTRY_LIMIT
+        return self.DEFAULT_ENTRY_LIMIT

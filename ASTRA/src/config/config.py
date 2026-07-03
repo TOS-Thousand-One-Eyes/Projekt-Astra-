@@ -11,6 +11,9 @@ DEFAULTS = {
     "log_level": "INFO",
     "log_to_file": False,
     "check_for_updates": True,
+    "use_language_fallback": False,
+    "language_base_url": "http://localhost:11434",
+    "language_model": "qwen3:4b",
 }
 
 
@@ -25,6 +28,9 @@ class Config:
         self.log_level = settings["log_level"]
         self.log_to_file = settings["log_to_file"]
         self.check_for_updates = settings["check_for_updates"]
+        self.use_language_fallback = settings["use_language_fallback"]
+        self.language_base_url = settings["language_base_url"]
+        self.language_model = settings["language_model"]
 
     def _load(self):
         if not self.path.exists():
