@@ -66,3 +66,32 @@ Run this periodically — not just at release time:
 - GitHub Actions: check the Actions tab manually if `gh` CLI isn't
   available in the current shell (a fresh install needs a new
   terminal/session before it's on `PATH`)
+
+# PERMISSION CONVENTION
+
+Any future action that touches the network, or writes files outside
+`data/`, must get its own `config.json` boolean flag before it ships —
+not retrofitted after.
+
+- Default the flag to the safe/conservative choice for that specific
+  action. Read-only, low-risk things (like `check_for_updates`) can
+  reasonably default `true`. Anything higher-risk — a future local-LLM
+  network call, or writing files outside `data/` — should default
+  `false` until proven safe.
+- Name the flag after the capability/action it gates, not the
+  underlying mechanism (`check_for_updates`, not `use_urllib`).
+- Wiring pattern: add the key to `Config.DEFAULTS` (`Config` picks it
+  up automatically like every other setting), then gate the feature's
+  construction/call site on it. Existing example: `Config.DEFAULTS`
+  has `"check_for_updates": True`, and `main.py` only constructs
+  `UpdateChecker` — the only network call anywhere in the codebase —
+  with `UpdateChecker(config.version, logger) if config.check_for_updates
+  else None`.
+
+This is a lightweight, docs-only convention, not the full permission/
+approval system planned for v0.1.2 in `docs/ROADMAP.md` (every action
+has clear confirmation, approval rules for sensitive operations — a
+much larger scoped feature). It exists so that when the local-LLM/
+internet features already planned in `docs/suggestions.md` arrive,
+there's a designed convention to build against instead of retrofitting
+one under time pressure.
