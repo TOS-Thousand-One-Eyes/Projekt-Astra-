@@ -24,12 +24,6 @@ deliberately deferred — small individually, but bundling six unrelated
 fixes into one commit would violate the single-capability-commit rule, so
 each needs its own pass next time this area is touched:
 
-- **`Modules.start_all()`/`stop_all()`'s own error handler can crash**
-  (`modules/modules.py`): the `except` block does `f"Module
-  '{module.name}' failed..."` — if a malformed module lacks `.name` *and*
-  raises, the f-string itself raises `AttributeError`, escaping uncaught
-  and triggering the stuck-state bug above. Fix: `getattr(module, "name",
-  type(module).__name__)` in both handlers.
 - **`Config` doesn't validate types from `config.json`**
   (`config/config.py` `_load()`): a hand-edited
   `"use_language_fallback": "false"` (string, not JSON `false`) is truthy
@@ -123,6 +117,14 @@ forgotten, not because it's next.
 
 ## Done
 
+- ~~**`Modules.start_all()`/`stop_all()`'s error handler crashing on a
+  module without `.name`**~~ — Done (this session, deferred item 0 from
+  the 2026-07-03 audit): the `except` blocks' f-string did `module.name`
+  directly — a malformed (non-`Module`-derived) object that both lacks
+  `.name` and raises would crash the handler itself with an
+  `AttributeError`. Both handlers now use a `_module_name()` helper
+  (`getattr(module, "name", type(module).__name__)`). Covered by new
+  nameless-module cases in `tests/test_modules.py`.
 - ~~**`Brain` stuck-state on a mid-transition crash**~~ — Done (this
   session, deferred item 0 from the 2026-07-03 audit): `start()`/`stop()`
   now wrap their bodies in try/except — on any failure between

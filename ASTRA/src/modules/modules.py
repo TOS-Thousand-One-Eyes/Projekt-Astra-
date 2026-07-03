@@ -15,11 +15,15 @@ class Modules:
             try:
                 module.start()
             except Exception as error:
-                self.logger.error(f"Module '{module.name}' failed to start: {error}")
+                self.logger.error(f"Module '{self._module_name(module)}' failed to start: {error}")
 
     def stop_all(self):
         for module in self.modules:
             try:
                 module.stop()
             except Exception as error:
-                self.logger.error(f"Module '{module.name}' failed to stop: {error}")
+                self.logger.error(f"Module '{self._module_name(module)}' failed to stop: {error}")
+
+    @staticmethod
+    def _module_name(module):
+        return getattr(module, "name", type(module).__name__)

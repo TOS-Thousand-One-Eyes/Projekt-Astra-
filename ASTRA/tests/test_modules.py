@@ -100,6 +100,33 @@ def test_stop_all_logs_the_failing_modules_name():
     assert any("failing" in entry and "ERROR" in entry for entry in logs)
 
 
+class NamelessFailingModule:
+
+    def start(self):
+        raise RuntimeError("boom")
+
+    def stop(self):
+        raise RuntimeError("boom")
+
+
+def test_start_all_survives_a_failing_module_without_a_name():
+    logger = Logger()
+    modules = Modules(logger)
+    modules.add_module(NamelessFailingModule())
+    modules.start_all()
+    logs = logger.get_logs()
+    assert any("NamelessFailingModule" in entry and "ERROR" in entry for entry in logs)
+
+
+def test_stop_all_survives_a_failing_module_without_a_name():
+    logger = Logger()
+    modules = Modules(logger)
+    modules.add_module(NamelessFailingModule())
+    modules.stop_all()
+    logs = logger.get_logs()
+    assert any("NamelessFailingModule" in entry and "ERROR" in entry for entry in logs)
+
+
 def test_language_module_start_marks_it_available():
     class StubClient:
         def ensure_available(self):
