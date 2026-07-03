@@ -23,7 +23,9 @@ class FactCommand(Command):
         stripped = message.strip()
 
         learn_match = self.LEARN_PATTERN.match(stripped)
-        if learn_match:
+        # A whitespace-only key or value (e.g. "my nickname is  ?") would
+        # store an empty fact - fall through instead of learning nothing.
+        if learn_match and learn_match.group(1).strip() and learn_match.group(2).strip():
             key, value = learn_match.group(1).strip(), learn_match.group(2).strip()
             self.memory.learn(key, value)
             return f"Got it, I'll remember that your {key} is {value}."
@@ -32,7 +34,9 @@ class FactCommand(Command):
         if query_match:
             key = query_match.group(1).strip()
             value = self.memory.get_fact(key)
-            if value:
+            # "is not None", not truthiness: a hand-edited falsy value like 0
+            # is still a known fact ("facts" lists it, so the query must too).
+            if value is not None:
                 return f"Your {key} is {value}."
             return f"I don't know your {key} yet. Tell me with: my {key} is ..."
 

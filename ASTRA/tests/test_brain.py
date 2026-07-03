@@ -363,6 +363,15 @@ class TestFacts:
         running_brain.receive("my name is Erik")
         assert running_brain.receive("what's my name??") == "Your name is Erik."
 
+    def test_whitespace_only_fact_value_is_not_learned(self, running_brain):
+        response = running_brain.receive("my nickname is  ?")
+        assert "I'll remember" not in response
+        assert running_brain.memory.all_facts() == {}
+
+    def test_falsy_fact_value_is_still_reported_as_known(self, running_brain, memory):
+        memory.facts.facts["age"] = 0
+        assert running_brain.receive("what is my age?") == "Your age is 0."
+
 
 class TestPersonalization:
 
