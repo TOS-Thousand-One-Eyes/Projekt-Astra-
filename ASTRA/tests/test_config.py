@@ -194,3 +194,19 @@ def test_non_utf8_config_file_falls_back_to_defaults_with_a_warning(tmp_path):
     config = Config(path=path)
     assert config.name == DEFAULTS["name"]
     assert any("UTF-8" in warning for warning in config.load_warnings)
+
+
+def test_lowercase_log_level_is_accepted_and_normalized(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"log_level": "debug", "version": "1.2.3"}), encoding="utf-8")
+    config = Config(path=path)
+    assert config.log_level == "DEBUG"
+    assert config.load_warnings == []
+
+
+def test_unknown_log_level_falls_back_to_info_with_a_warning(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"log_level": "VERBOSE"}), encoding="utf-8")
+    config = Config(path=path)
+    assert config.log_level == "INFO"
+    assert any("log_level" in warning for warning in config.load_warnings)

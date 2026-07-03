@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from utils.logger import LEVELS
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_FILE = PROJECT_ROOT / "config.json"
 
@@ -31,13 +33,25 @@ class Config:
             self.load_warnings.append(
                 f'{self.path.name} has no "version" value; update checks will be skipped until it\'s set.'
             )
-        self.log_level = settings["log_level"]
+        self.log_level = self._validated_log_level(settings["log_level"])
         self.log_to_file = settings["log_to_file"]
         self.check_for_updates = settings["check_for_updates"]
         self.use_language_fallback = settings["use_language_fallback"]
         self.language_base_url = settings["language_base_url"]
         self.language_model = settings["language_model"]
         self.language_generate_timeout = settings["language_generate_timeout"]
+
+    def _validated_log_level(self, value):
+        # Logger would silently coerce an unknown level to INFO; catch it
+        # here instead so the fallback is observable (and accept any casing).
+        normalized = value.strip().upper()
+        if normalized in LEVELS:
+            return normalized
+        self.load_warnings.append(
+            f'{self.path.name} has an unknown "log_level" value ({value!r}); '
+            f'expected one of {", ".join(LEVELS)}. Using "INFO".'
+        )
+        return "INFO"
 
     def _validated(self, loaded):
         valid = {}
