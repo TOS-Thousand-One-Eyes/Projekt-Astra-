@@ -12,40 +12,56 @@ Done items are kept at the bottom for history.
 
 ---
 
-## 0. Findings from the 2026-07-03 six-agent full-codebase bug audit, not fixed yet
+## 1. Report `LanguageModule` availability in `diagnostics`/`status` (next small step toward roadmap v0.1.8)
 
-Six parallel agents audited `core/config`, `utils`, `memory`, `commands`,
-`modules`, and `main`/integration end to end (not diff-only) after this
-session's failure-flagging work landed. Three confirmed bugs were fixed
-immediately (see Done below: dispatch crashing on a non-string message,
-`Logger.log()` crashing on a bad `level` or an unprintable character, and
-`forget` deleting entries of the wrong type). The rest are real but
-deliberately deferred — small individually, but bundling six unrelated
-fixes into one commit would violate the single-capability-commit rule, so
-each needs its own pass next time this area is touched:
+`status` now reports config/memory load warnings and file-logging
+failures, but not the one remaining silently-degradable subsystem:
+`LanguageModule` tracks an `available` flag that flips to `False` when
+Ollama is unreachable at startup or fails mid-session — and the only
+trace is a startup ERROR or a mid-session WARNING that scrolls away,
+the exact problem `status` was built to solve. Small, single-commit:
+`DiagnosticsCommand` already has no module access, so pass
+`modules.list_modules()` (or the language module) in and report
+"language fallback: available/unavailable/disabled by config". Same
+"no new tracking, just a new way to ask" scoping as the original
+`status` command.
 
-All six deferred findings above have now been fixed, each in its own
-commit — see Done below.
+## 2. Validate that `config.json`'s `version` is a string
 
-A same-day recheck round (6 fresh agents verifying the fixes above) found
-one more concrete bug in the same area, since fixed: `MemoryManager.forget()`
-called `self.short_memory.forget(entry)` unconditionally, even when
-`long_memory.forget()` removed nothing — so `forget test` after only a chat
-message "test" (no note) would tell the user "I couldn't find anything
-matching: test" while silently deleting that chat turn from short-term
-`recall`/`history`, contradicting the bot's own response. Now only calls
-`short_memory.forget()` when a note was actually removed. Covered by
-`tests/test_memory.py::test_memory_manager_forget_with_no_matching_note_leaves_short_memory_untouched`
-and `tests/test_brain.py::TestNotes::test_forget_with_no_matching_note_does_not_touch_short_term_recall`.
+The new type validation in `Config._validated()` checks every key
+against `DEFAULTS` — but `version` deliberately isn't in `DEFAULTS`, so
+it passes through unvalidated. A hand-edited unquoted `"version": 1.2`
+(a JSON number) flows into f-strings (works, prints `v1.2`) and then
+into `UpdateChecker._parse()`, which crashes on `.split`, gets caught,
+and warns "Local version is unknown" — observable but misleading (the
+version isn't missing, it's mis-typed, and the startup banner happily
+printed it). One-commit fix: special-case `version` in `Config` — if
+present but not a string, record a load warning naming the real problem
+and fall back to `UNKNOWN_VERSION`.
 
-Still not filed as a bug, since it's a bigger restructuring than a
-same-day fix warrants: `ShortMemory` itself has no type concept at all
-(it's an in-memory rolling buffer of raw strings, no persisted type
-field), so it still can't distinguish "note" from "chat" the way
-`LongMemory` now can — the fix above only stopped `forget` from touching
-`short_memory` on a no-op, it didn't make `short_memory` type-aware.
+## 3. Sweep stale `.tmp` files from `data/` at startup
 
-## 3. TFT coaching via screen access (correctly placed: far out, two dependencies)
+`Facts`/`LongMemory` saves now use PID-unique tmp names
+(`facts.json.<pid>.tmp`), which means a crash mid-save from a dead
+process leaves a stale tmp file that no future process will ever
+overwrite (new PID, new name). Harmless to correctness, but they
+accumulate silently in `data/`. One-commit fix: on `MemoryManager`
+construction (or each store's `load()`), delete `*.tmp` files matching
+the store's own prefix and log what was removed at `INFO`/`WARNING` —
+observable cleanup, per MANIFEST.md.
+
+## 4. Make `ShortMemory` type-aware (deferred restructuring, on record since 2026-07-03)
+
+`ShortMemory` is an in-memory rolling buffer of raw strings with no
+type concept, so it can't distinguish "note" from "chat" the way
+`LongMemory` does. The `forget()` fix (see Done) only stopped
+`MemoryManager.forget()` from touching short memory on a no-op; a
+matching *note* text still removes any same-text chat line from the
+short-term buffer as collateral. Bigger than a one-line fix (the buffer
+would need typed entries and its consumers updated), which is why it's
+filed here rather than fixed same-day.
+
+## 5. TFT coaching via screen access (correctly placed: far out, two dependencies)
 
 Erik's real near-term want, raised this session: Astra watching the screen
 during a TFT match and coaching live. Honest scope check before this goes
@@ -64,6 +80,29 @@ forgotten, not because it's next.
 
 ## Done
 
+- ~~**2026-07-03 follow-up audit round (3 agents: core/config/main,
+  memory/commands, utils/modules), 8 findings, all fixed same-day, each
+  its own commit**~~ — after the six deferred items from the morning's
+  6-agent audit were fixed (see below), a fresh 3-agent round over the
+  whole codebase found: `Logger`'s file-write-failure warning could
+  itself crash on a `UnicodeEncodeError` (the fallback the primary print
+  already had); `Config` crashed outright on a non-UTF-8 `config.json`
+  (PowerShell's `Out-File` writes UTF-16 by default) instead of falling
+  back with a warning; an unknown `log_level` value silently became
+  `INFO` with `status` reporting all-clear; Ctrl+C during startup (e.g.
+  mid update-check) escaped as a raw traceback because `brain.start()`
+  sat outside `main()`'s try block; `tests/test_main.py` made real
+  network calls through the un-stubbed update checker; `normalize()`
+  left a trailing space on inputs like `bye !`, missing every
+  exact-trigger match; `FactCommand` learned whitespace-only facts and
+  denied knowing hand-edited falsy ones; and `export` omitted
+  `language_generate_timeout` from the config section (its test asserted
+  the exact stale key set, masking the omission). The historical
+  context for the morning round — three bugs fixed immediately
+  (non-string dispatch crash, `Logger.log()` level/print crashes,
+  `forget` deleting the wrong type) plus the `MemoryManager.forget()`
+  short-memory no-op fix from its recheck — is preserved in the entries
+  below.
 - ~~**A `diagnostics`/`status` command to see warnings after startup
   scrolls by**~~ — Done (this session, was open item 1; first concrete
   step toward roadmap v0.1.8 "Observability"): new `DiagnosticsCommand`
