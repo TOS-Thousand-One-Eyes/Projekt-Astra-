@@ -66,12 +66,23 @@ each needs its own pass next time this area is touched:
   losing data. Low likelihood for a single-user CLI, but a real gap if
   ASTRA ever runs as more than one process.
 
-Also noted but not filed as a bug: `MemoryManager.forget()` now filters
-`long_memory` to `entry_type="note"` (fixed this session), but
-`ShortMemory.forget()` still matches by text only with no type concept at
-all — it's an in-memory rolling buffer with no persisted type field, so
-fixing the asymmetry would mean restructuring `ShortMemory` to track types,
-not a small fix.
+A same-day recheck round (6 fresh agents verifying the fixes above) found
+one more concrete bug in the same area, since fixed: `MemoryManager.forget()`
+called `self.short_memory.forget(entry)` unconditionally, even when
+`long_memory.forget()` removed nothing — so `forget test` after only a chat
+message "test" (no note) would tell the user "I couldn't find anything
+matching: test" while silently deleting that chat turn from short-term
+`recall`/`history`, contradicting the bot's own response. Now only calls
+`short_memory.forget()` when a note was actually removed. Covered by
+`tests/test_memory.py::test_memory_manager_forget_with_no_matching_note_leaves_short_memory_untouched`
+and `tests/test_brain.py::TestNotes::test_forget_with_no_matching_note_does_not_touch_short_term_recall`.
+
+Still not filed as a bug, since it's a bigger restructuring than a
+same-day fix warrants: `ShortMemory` itself has no type concept at all
+(it's an in-memory rolling buffer of raw strings, no persisted type
+field), so it still can't distinguish "note" from "chat" the way
+`LongMemory` now can — the fix above only stopped `forget` from touching
+`short_memory` on a no-op, it didn't make `short_memory` type-aware.
 
 ## 1. A `diagnostics`/`status` command to see warnings after startup scrolls by (preview of roadmap v0.1.8 "Observability")
 

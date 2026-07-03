@@ -291,3 +291,10 @@ def test_memory_manager_forget_does_not_remove_a_chat_entry_with_the_same_text(m
     assert removed == 1
     remaining_types = [item["type"] for item in memory.recall_long()]
     assert remaining_types == ["chat"]
+
+
+def test_memory_manager_forget_with_no_matching_note_leaves_short_memory_untouched(memory):
+    memory.remember("test", entry_type="chat")
+    removed = memory.forget("test")
+    assert removed == 0
+    assert memory.recall() == ["test"]

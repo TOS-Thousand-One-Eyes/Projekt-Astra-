@@ -364,6 +364,13 @@ class TestNotes:
         assert chat_entries
         assert not note_entries
 
+    def test_forget_with_no_matching_note_does_not_touch_short_term_recall(self, running_brain):
+        running_brain.receive("test")
+        response = running_brain.receive("forget test")
+
+        assert "couldn't find" in response
+        assert "test" in running_brain.memory.recall()
+
     def test_search_finds_matching_entries(self, running_brain):
         running_brain.receive("remember buy milk")
         response = running_brain.receive("search milk")

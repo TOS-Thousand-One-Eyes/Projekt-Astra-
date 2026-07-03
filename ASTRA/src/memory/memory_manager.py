@@ -30,7 +30,8 @@ class MemoryManager:
 
     def forget(self, entry):
         removed = self.long_memory.forget(entry, entry_type="note")
-        self.short_memory.forget(entry)
+        if removed:
+            self.short_memory.forget(entry)
         return removed
 
     def learn(self, key, value):
