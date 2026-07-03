@@ -40,3 +40,29 @@ When bumping the version:
 release-tag source and isn't read by the app. They're synced by hand,
 not by code. There's no third Python-level copy to keep in sync anymore:
 `Config.DEFAULTS` no longer hardcodes a version literal.
+
+# HEALTH CHECK CHECKLIST
+
+Run this periodically — not just at release time:
+
+- `python -m pytest` — full suite must be green
+- `git status` — nothing uncommitted or unpushed lingering
+- Version consistency: `pyproject.toml`, `config.json`, and
+  `docs/PROJECT_STATE.md`'s `Version:` line all match
+- Dead code sweep: for each candidate method, grep every call site
+  across `src/` AND `tests/`. A method with zero callers anywhere
+  outside its own dedicated unit test is dead — delete it and that
+  test, then rerun the full suite. Don't delete something just because
+  it looks unused at a glance: check whether it serves a distinct
+  purpose a caller actually relies on (e.g. `Brain.process()` looks
+  like `receive()`'s poor cousin, but it deliberately skips the
+  `is_running` gate — its one test needs exactly that, so it stays)
+- `docs/suggestions.md` vs `docs/ROADMAP.md`: confirm suggestions.md's
+  open items are still accurate, and pull forward any newly-relevant
+  near-term roadmap milestones as concrete, small suggestions
+- `docs/PROJECT_STATE.md`'s documented file tree vs. the real
+  `src/`/`tests/` layout (`find src tests -name "*.py"`) — catch doc
+  drift before it compounds
+- GitHub Actions: check the Actions tab manually if `gh` CLI isn't
+  available in the current shell (a fresh install needs a new
+  terminal/session before it's on `PATH`)

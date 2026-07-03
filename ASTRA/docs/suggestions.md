@@ -2,11 +2,67 @@
 
 Ideas for what to tackle next, roughly in order of impact vs. effort.
 
+`docs/ROADMAP.md` has the longer-term version-gated milestone sequence
+(v0.1.1 onward) — items here are that roadmap's nearest milestones scoped
+down to a concrete, small, single-commit-sized first step, the same way
+every item in this file has been scoped so far. Reconciled against the
+roadmap on 2026-07-03.
+
 Done items are kept at the bottom for history.
 
 ---
 
-## 1. Local LLM as a fallback brain
+## 1. Memory visibility (preview of roadmap v0.1.4 "Memory quality")
+
+`LongMemory` has grown, been search/forget-capable, and note/chat-tagged
+since v0.0.9-v0.0.10, but there's still no way to see its *shape* — how
+many entries, how many notes vs. chat, oldest/newest timestamp. You can't
+meaningfully plan deduplication, relevance scoring, or archiving (the full
+v0.1.4 scope) without first being able to see what's actually accumulating.
+A small `memory stats` chat trigger reporting entry counts by type and the
+oldest/newest timestamps is the cheap, obvious first step — reuses
+`LongMemory.recall()`, no new storage, no new file.
+
+## 2. Memory export (preview of roadmap v0.1.3 "Backup/restore")
+
+v0.1.3's full scope is export + import/restore. Import is the risky half
+(overwriting real data on restore) — do the safe half first. An `export`
+chat trigger that bundles `long_memory.json` + `facts.json` + `config.json`
+into one timestamped JSON file the user can back up manually. Directly
+useful right now, independent of anything else: this session alone hit two
+separate incidents of manual verification scripts accidentally polluting
+the real `data/long_memory.json` — an easy one-command snapshot before any
+risky manual testing would have made both a non-issue.
+
+## 3. A permission convention, before there's anything risky to gate
+
+Roadmap v0.1.2 is a full permission/approval system ("every action —
+internet, files, automation — has clear confirmation"). Nothing in the
+codebase does anything risky enough yet to need that machinery — the only
+network call today is `UpdateChecker`'s read-only version check, already
+gated behind `config.json`'s `check_for_updates` flag (default `true`,
+no data sent). That flag is already a tiny, working instance of the
+pattern v0.1.2 wants generalized. Worth writing down as an explicit
+convention now, before the local-LLM/internet features that will actually
+need it arrive: any future action that touches the network or writes files
+outside `data/` gets its own `config.json` boolean, defaulting to the safe
+choice, following `check_for_updates`'s precedent — a docs-only change
+(a short section in `docs/MANIFEST.md`), not code, so there's a designed
+convention to build against instead of retrofitting one later.
+
+## 4. A preference fact that actually changes behavior (preview of roadmap v0.1.1)
+
+v0.1.1 wants persistent communication-style/language/priority preferences.
+The existing `Facts` system (`my <thing> is <value>`) is already a
+general-purpose key-value store — it doesn't need a new subsystem, it
+needs one more consumer. `GreetingCommand` already proved the pattern
+(reads the `name` fact, changes its response). Pick one more: e.g.
+`my response length is short` consulted by `MemoryCommand`'s `history`/
+`recall` (currently a hardcoded last-5) to actually shorten output. Small,
+reuses what exists, and proves "preferences change behavior" generalizes
+beyond the one greeting case before investing in anything dedicated.
+
+## 5. Local LLM as a fallback brain
 
 Per the "Offline First" principle: instead of `I heard: ...` for unmatched
 input, a `LanguageModule` should pass the message to a local Ollama model.
@@ -16,13 +72,25 @@ assistant." The `Modules` hardening this depended on already landed (error
 handling + required `logger`, see Done below), so a flaky/unreachable Ollama
 server can no longer brick the Brain.
 
-**Recommended model:** `llama3.2:1b` (~1.3GB disk, ~1-2GB RAM) as the
-default — small enough to run on modest hardware while still being
-coherent, and a reasonable balance for a learning project that isn't
-trying to be a serious chatbot yet. `qwen2.5:0.5b` (~400MB disk, <1GB RAM)
-is a lighter fallback recommendation for weaker machines, and
-`gemma3:1b`/`gemma2:2b` are alternatives in the same weight class if
-`llama3.2:1b`'s answers turn out unsatisfying.
+**Recommended model — recalibrated against Erik's actual hardware** (Intel
+i5-10310U, 4 cores/8 threads @ 2.21GHz, integrated Intel UHD graphics with
+no dedicated VRAM, 16GB RAM — confirmed models needing up to ~8-10GB RAM
+are a fine normal target, not just the lightest option): `qwen3:4b` or
+`qwen3:8b` (~2.5-5.2GB disk, ~5-9GB RAM) as the real default — the earlier
+`llama3.2:1b` recommendation was written before hardware specs were known
+and undersells what this machine can actually run. `deepseek-r1:8b` is a
+reasoning-focused alternative in the same weight class (note: its distilled
+models emit `<think>...</think>` reasoning traces in the response by
+default — the response parser needs to handle/strip that, unlike plain
+Qwen3/Llama-family models). Keep `llama3.2:1b`/`qwen2.5:0.5b` in mind as
+the "still works even when the machine is busy with other things" fallback
+— **CPU-only inference speed (no GPU) is the more relevant constraint here
+than RAM headroom**: a bigger model will simply respond slower, not fail to
+fit.
+
+Qwen3 and DeepSeek-R1 (local) need **zero new client code** — they're just
+different `model` string values on the same `OllamaClient` described below,
+not separate integrations.
 
 **Recommended endpoint:** Ollama's local server (`http://localhost:11434`)
 exposes `POST /api/generate` (single-turn: `{"model": ..., "prompt": ...,
@@ -69,6 +137,30 @@ only, same as `UpdateChecker`.
 
 This is a design only, not yet implemented — no `LanguageModule`,
 `OllamaClient`, or registry wiring code exists yet.
+
+## 6. TFT coaching via screen access (correctly placed: far out, two dependencies)
+
+Erik's real near-term want, raised this session: Astra watching the screen
+during a TFT match and coaching live. Honest scope check before this goes
+anywhere: it needs **both** a working local LLM (#5 above) **and** Vision
+(roadmap v0.2.2 — "OCR, screenshots, basic 'what's on screen'"), neither of
+which exists yet. It's also not really an LLM-reasoning problem underneath
+— TFT patches every ~2 weeks and rotates trait/item sets every ~4 months,
+so a generic local model's training data goes stale fast regardless of
+which one is running; real coaching value needs live/curated current-meta
+data as grounding context fed into the model, not just a bigger model.
+Correctly sequenced this stays a v0.2.2+ idea, not something to reach for
+early — flagging it here so it's on record and roadmap-placed rather than
+forgotten, not because it's next.
+
+## 7. Deduplicate the `StubModule` test double
+
+`tests/test_modules.py` and `tests/test_brain.py::TestModulesLifecycle`
+each define an identical local `StubModule(Module)` (`name`/`started`/
+`stopped` tracking) instead of sharing one from `tests/conftest.py`,
+where `memory`/`config`/`brain`/`running_brain` are already centralized.
+Flagged in a review pass, never actually fixed. Pure test hygiene, zero
+behavior change, five-minute fix whenever someone's next in that file.
 
 ---
 
