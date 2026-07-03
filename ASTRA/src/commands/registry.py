@@ -49,12 +49,12 @@ class CommandRegistry:
 
 
 def build_default_registry(config, memory, language_module=None, logger=None):
-    fact = FactCommand(memory)
-    note = MemoryCommand(memory)
-    greeting = GreetingCommand(config, memory)
-    farewell = ExitCommand(config)
-    export = ExportCommand(config, memory)
-    help_command = HelpCommand([fact, note, greeting, farewell, export])
+    fact = FactCommand(memory, logger=logger)
+    note = MemoryCommand(memory, logger=logger)
+    greeting = GreetingCommand(config, memory, logger=logger)
+    farewell = ExitCommand(config, logger=logger)
+    export = ExportCommand(config, memory, logger=logger)
+    help_command = HelpCommand([fact, note, greeting, farewell, export], logger=logger)
 
     return CommandRegistry(
         [fact, note, help_command, greeting, farewell, export],

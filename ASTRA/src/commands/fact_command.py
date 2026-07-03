@@ -15,7 +15,8 @@ class FactCommand(Command):
         "- facts / what do you know about me - list everything you've taught me"
     )
 
-    def __init__(self, memory):
+    def __init__(self, memory, logger=None):
+        super().__init__(logger)
         self.memory = memory
 
     def handle(self, message, normalized):

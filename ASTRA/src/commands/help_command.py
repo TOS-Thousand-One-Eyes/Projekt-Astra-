@@ -6,7 +6,8 @@ class HelpCommand(Command):
     TRIGGERS = ("help", "commands", "what can you do")
     help_text = "- help - show this message"
 
-    def __init__(self, other_commands):
+    def __init__(self, other_commands, logger=None):
+        super().__init__(logger)
         self.other_commands = other_commands
 
     def handle(self, message, normalized):

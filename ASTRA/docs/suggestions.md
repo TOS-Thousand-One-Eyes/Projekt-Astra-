@@ -59,21 +59,6 @@ and report them on demand, the same way `memory stats` already reports
 already being tracked. Small, reuses what exists, and is the obvious
 first step toward roadmap v0.1.8's "internal health report."
 
-## 2. `MemoryCommand`'s non-string `response length` fact silently falls back, unlike everything else fixed this session
-
-`_entry_limit()` guards against a non-string `response length` fact
-value (a hand-edited `facts.json`) with `isinstance(preference, str)`,
-falling back to the default limit — safely, but silently, the exact
-pattern just fixed everywhere else this session (see MANIFEST.md's
-"OBSERVABLE FALLBACKS"). Deliberately not fixed today: `Command`
-subclasses don't currently take a `logger` (only `MemoryCommand`/
-`GreetingCommand`'s `config`/`memory`), so warning here would mean
-giving every command a logger dependency — a real DI change, not a
-one-line fix, and out of scope for a single edge case reachable only
-by manually corrupting `facts.json`. Worth deciding deliberately (give
-`Command` a logger now, generalizing the pattern) rather than
-one-off-ing a workaround, next time this file is touched.
-
 ## 3. TFT coaching via screen access (correctly placed: far out, two dependencies)
 
 Erik's real near-term want, raised this session: Astra watching the screen
@@ -93,6 +78,20 @@ forgotten, not because it's next.
 
 ## Done
 
+- ~~**`Command` gets an optional logger; `MemoryCommand`'s non-string
+  `response length` fact no longer falls back silently**~~ — Done (this
+  session, was open item 2): decided the general way rather than
+  one-off-ing — `Command.__init__(logger=None)` now holds the logger for
+  every command, with a `warn()` helper that no-ops when no logger was
+  injected; `build_default_registry()` passes its existing `logger`
+  parameter into every command it builds, so Brain-driven commands are
+  wired automatically. First use: `_entry_limit()` logs a `WARNING`
+  (per MANIFEST.md's observable-fallbacks rule) when the
+  `response length` fact is non-text (hand-corrupted `facts.json`)
+  instead of silently using the default limit; a valid-but-unrecognized
+  text value (e.g. "long") still just uses the default without warning,
+  same as before. Covered by new cases in
+  `tests/test_brain.py::TestPreferences`.
 - ~~**`Facts`/`LongMemory` atomic-write tmp path not unique across
   concurrent instances**~~ — Done (this session, deferred item 0 from the
   2026-07-03 audit, the last of the six): both `save()` methods used a

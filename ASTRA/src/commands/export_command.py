@@ -14,7 +14,8 @@ class ExportCommand(Command):
     TRIGGERS = ("export",)
     help_text = "- export - save a copy of your memory and config to a file"
 
-    def __init__(self, config, memory, export_dir=EXPORT_DIR):
+    def __init__(self, config, memory, export_dir=EXPORT_DIR, logger=None):
+        super().__init__(logger)
         self.config = config
         self.memory = memory
         self.export_dir = Path(export_dir)

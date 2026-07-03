@@ -25,7 +25,8 @@ class GreetingCommand(Command):
         "- what is your name / who are you - ask who I am"
     )
 
-    def __init__(self, config, memory):
+    def __init__(self, config, memory, logger=None):
+        super().__init__(logger)
         self.config = config
         self.memory = memory
 

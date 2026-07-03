@@ -18,7 +18,8 @@ class MemoryCommand(Command):
         "- forget <text> - remove a memory that matches (case-insensitive)"
     )
 
-    def __init__(self, memory):
+    def __init__(self, memory, logger=None):
+        super().__init__(logger)
         self.memory = memory
 
     def handle(self, message, normalized):
@@ -93,6 +94,14 @@ class MemoryCommand(Command):
 
     def _entry_limit(self):
         preference = self.memory.get_fact("response length")
-        if isinstance(preference, str) and preference.strip().lower() == "short":
+        if preference is None:
+            return self.DEFAULT_LIMIT
+        if not isinstance(preference, str):
+            self.warn(
+                f'The "response length" fact is not text ({preference!r}); '
+                f"check facts.json. Using the default limit."
+            )
+            return self.DEFAULT_LIMIT
+        if preference.strip().lower() == "short":
             return self.SHORT_LIMIT
         return self.DEFAULT_LIMIT

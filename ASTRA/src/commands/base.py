@@ -4,8 +4,16 @@ class Command:
     help_text = None
     stops_brain = False
 
+    def __init__(self, logger=None):
+        self.logger = logger
+
     def handle(self, message, normalized):
         raise NotImplementedError
+
+    def warn(self, message):
+        """Log an observable-fallback warning if a logger was injected."""
+        if self.logger:
+            self.logger.warning(message)
 
 
 class DispatchResult:

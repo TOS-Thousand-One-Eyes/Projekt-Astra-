@@ -570,6 +570,31 @@ class TestPreferences:
         response = running_brain.receive("recall")
         assert "buy milk" in response
 
+    def test_non_string_response_length_fact_logs_a_warning(self, running_brain, memory):
+        memory.facts.facts["response length"] = True
+        running_brain.receive("remember buy milk")
+        running_brain.receive("recall")
+
+        logs = running_brain.logger.get_logs()
+        assert any("WARNING" in entry and "response length" in entry for entry in logs)
+
+    def test_valid_response_length_fact_logs_no_warning(self, running_brain):
+        running_brain.receive("my response length is short")
+        running_brain.receive("remember buy milk")
+        running_brain.receive("recall")
+
+        logs = running_brain.logger.get_logs()
+        assert not any("WARNING" in entry and "response length" in entry for entry in logs)
+
+    def test_non_string_response_length_fact_without_logger_does_not_crash(self, memory):
+        from commands.memory_command import MemoryCommand
+
+        memory.facts.facts["response length"] = True
+        memory.remember("buy milk", entry_type="note")
+        command = MemoryCommand(memory)
+
+        assert "buy milk" in command.handle("recall", "recall")
+
     def test_repeated_trailing_punctuation_does_not_leak_into_preference_value(self, running_brain):
         running_brain.receive("my response length is short..")
         for i in range(5):
