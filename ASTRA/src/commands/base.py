@@ -17,3 +17,9 @@ class DispatchResult:
 
 def normalize(message):
     return message.strip().lower().rstrip("?!.")
+
+
+def looks_like_shell_command(message):
+    """True for stray shell invocations (e.g. a launch command pasted into the chat prompt)."""
+    stripped = message.strip().lower()
+    return ".exe" in stripped and stripped.endswith(".py")

@@ -1,4 +1,4 @@
-from commands.base import DispatchResult, normalize
+from commands.base import DispatchResult, looks_like_shell_command, normalize
 from commands.exit_command import ExitCommand
 from commands.fact_command import FactCommand
 from commands.greeting_command import GreetingCommand
@@ -17,6 +17,8 @@ class CommandRegistry:
             response = command.handle(message, normalized)
             if response is not None:
                 return DispatchResult(response, command.stops_brain)
+        if looks_like_shell_command(message):
+            return DispatchResult("That looks like a shell command, not a chat message - did it get typed into the wrong window?")
         return DispatchResult(f"I heard: {message}")
 
 

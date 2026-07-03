@@ -150,6 +150,11 @@ class TestCommands:
     def test_unknown_message_is_echoed(self, running_brain):
         assert running_brain.receive("something random") == "I heard: something random"
 
+    def test_stray_shell_command_is_not_echoed(self, running_brain):
+        response = running_brain.receive(r"C:\Python\python.exe c:/Development/ASTRA/src/main.py")
+        assert "I heard" not in response
+        assert "shell command" in response
+
 
 class TestFacts:
 
