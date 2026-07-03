@@ -131,7 +131,7 @@ class Brain:
     def _recover_to_offline(self, phase, error):
         self.logger.error(
             f"{phase} failed mid-transition ({type(error).__name__}: {error}); "
-            f"returning to {self.OFFLINE} so it can be retried."
+            f"returning to {self.OFFLINE} so the brain can be started again."
         )
         self._set_state(self.OFFLINE)
 
