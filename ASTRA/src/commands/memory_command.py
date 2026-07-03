@@ -5,12 +5,14 @@ class MemoryCommand(Command):
 
     RECALL_TRIGGERS = ("recall", "what do you remember")
     HISTORY_TRIGGERS = ("history",)
+    STATS_TRIGGERS = ("memory stats",)
 
     help_text = (
         "- remember <something> - ask me to save a note\n"
         "- recall / what do you remember - see your recent notes\n"
         "- search <text> - search your notes\n"
         "- history - see everything, notes and chat both\n"
+        "- memory stats - see counts and oldest/newest entry timestamps\n"
         "- forget <text> - remove a memory that matches (case-insensitive)"
     )
 
@@ -37,6 +39,9 @@ class MemoryCommand(Command):
         if normalized in self.HISTORY_TRIGGERS:
             return self._history_summary()
 
+        if normalized in self.STATS_TRIGGERS:
+            return self._stats_summary()
+
         if normalized in self.RECALL_TRIGGERS:
             return self._recall_summary()
 
@@ -62,6 +67,23 @@ class MemoryCommand(Command):
         if not entries:
             return "I don't remember anything yet."
         return self._format_entries(entries[-5:], "Here's everything recently, notes and chat:")
+
+    def _stats_summary(self):
+        entries = self.memory.recall_long()
+        if not entries:
+            return "I don't have any memory yet."
+        notes = [item for item in entries if item.get("type") == "note"]
+        chat_count = len(entries) - len(notes)
+        oldest = entries[0]["timestamp"]
+        newest = entries[-1]["timestamp"]
+        return (
+            "Memory stats:\n"
+            f"- total entries: {len(entries)}\n"
+            f"- notes: {len(notes)}\n"
+            f"- chat: {chat_count}\n"
+            f"- oldest: {oldest}\n"
+            f"- newest: {newest}"
+        )
 
     def _format_entries(self, entries, header):
         lines = [f"- [{item['timestamp']}] {item['entry']}" for item in entries]

@@ -278,6 +278,39 @@ class TestNotes:
         assert "remember buy milk" in response
 
 
+class TestMemoryStats:
+
+    def test_stats_when_empty(self, running_brain):
+        response = running_brain.receive("memory stats")
+        assert "don't have any memory" in response
+
+    def test_stats_reports_counts_and_timestamps(self, running_brain):
+        running_brain.receive("remember buy milk")
+        running_brain.receive("remember walk the dog")
+        running_brain.receive("hi")
+
+        entries = running_brain.memory.recall_long()
+        total_count = len(entries)
+        note_count = len([item for item in entries if item.get("type") == "note"])
+        chat_count = total_count - note_count
+        oldest = entries[0]["timestamp"]
+        newest = entries[-1]["timestamp"]
+
+        response = running_brain.receive("memory stats")
+
+        assert f"total entries: {total_count}" in response
+        assert f"notes: {note_count}" in response
+        assert f"chat: {chat_count}" in response
+        assert oldest in response
+        assert newest in response
+
+    def test_stats_counts_notes_separately_from_chat(self, running_brain):
+        running_brain.receive("remember buy milk")
+        running_brain.receive("hi")
+        response = running_brain.receive("memory stats")
+        assert "notes: 1" in response
+
+
 class TestSessionSummary:
 
     def test_stop_logs_session_summary_with_counts(self, running_brain):
