@@ -12,6 +12,67 @@ Done items are kept at the bottom for history.
 
 ---
 
+## 0. Findings from the 2026-07-03 six-agent full-codebase bug audit, not fixed yet
+
+Six parallel agents audited `core/config`, `utils`, `memory`, `commands`,
+`modules`, and `main`/integration end to end (not diff-only) after this
+session's failure-flagging work landed. Three confirmed bugs were fixed
+immediately (see Done below: dispatch crashing on a non-string message,
+`Logger.log()` crashing on a bad `level` or an unprintable character, and
+`forget` deleting entries of the wrong type). The rest are real but
+deliberately deferred — small individually, but bundling six unrelated
+fixes into one commit would violate the single-capability-commit rule, so
+each needs its own pass next time this area is touched:
+
+- **`Brain` has no recovery path from a mid-transition crash**
+  (`core/brain.py` `TRANSITIONS`/`start()`/`stop()`): if anything inside
+  `start()` raises after `_set_state(STARTING)` but before reaching
+  `RUNNING` (e.g. a corrupted timestamp blowing up
+  `datetime.fromisoformat` in `_log_last_seen`), the state gets stuck at
+  `STARTING` forever — a second `start()` call then raises a confusing
+  `Invalid state transition` error instead of the real one. Needs either a
+  `STARTING`/`STOPPING` → `OFFLINE` escape transition or a try/finally
+  around the body of `start()`/`stop()`.
+- **`Modules.start_all()`/`stop_all()`'s own error handler can crash**
+  (`modules/modules.py`): the `except` block does `f"Module
+  '{module.name}' failed..."` — if a malformed module lacks `.name` *and*
+  raises, the f-string itself raises `AttributeError`, escaping uncaught
+  and triggering the stuck-state bug above. Fix: `getattr(module, "name",
+  type(module).__name__)` in both handlers.
+- **`Config` doesn't validate types from `config.json`**
+  (`config/config.py` `_load()`): a hand-edited
+  `"use_language_fallback": "false"` (string, not JSON `false`) is truthy
+  in Python, so the flag silently flips on against the user's intent, with
+  no warning logged. Same risk for `language_generate_timeout` needing to
+  be numeric.
+- **Ollama's `<think>` stripping can eat literal text that isn't reasoning
+  markup** (`utils/ollama_client.py` `THINK_BLOCK_PATTERN` and friends): a
+  real answer that happens to contain the literal string `<think>` or
+  `</think>` (e.g. an answer *about* prompt formats) gets truncated or
+  deleted, since the regexes can't distinguish real prose from reasoning
+  fragments. No clean fix without a more structured way to detect genuine
+  reasoning blocks from the model.
+- **`update_checker`'s version comparison breaks on differing segment
+  counts** (`utils/update_checker.py` `_parse`): Python tuple comparison
+  makes `(1, 2) < (1, 2, 0)`, so `"1.2"` vs `"1.2.0"` would spuriously
+  compare as different versions. Dormant today since the project
+  consistently uses 3-segment `x.y.z`, but no padding/normalization guard
+  exists if that ever changes.
+- **`Facts`/`LongMemory`'s atomic-write tmp path isn't unique across
+  concurrent instances** (`memory/facts.py`, `memory/long_memory.py`
+  `save()`): both use a fixed `path.tmp` name with no PID/UUID component.
+  Two ASTRA processes writing at overlapping times could interleave writes
+  to the same tmp file before either `os.replace()` runs, corrupting or
+  losing data. Low likelihood for a single-user CLI, but a real gap if
+  ASTRA ever runs as more than one process.
+
+Also noted but not filed as a bug: `MemoryManager.forget()` now filters
+`long_memory` to `entry_type="note"` (fixed this session), but
+`ShortMemory.forget()` still matches by text only with no type concept at
+all — it's an in-memory rolling buffer with no persisted type field, so
+fixing the asymmetry would mean restructuring `ShortMemory` to track types,
+not a small fix.
+
 ## 1. A `diagnostics`/`status` command to see warnings after startup scrolls by (preview of roadmap v0.1.8 "Observability")
 
 Config/memory load warnings (see `docs/CHANGELOG.md`'s latest entry) are
@@ -60,6 +121,31 @@ forgotten, not because it's next.
 
 ## Done
 
+- ~~**Automatic failure flagging instead of crashing or silently
+  continuing**~~ — Done (this session): `CommandRegistry.dispatch()` now
+  wraps message normalization and every `command.handle()` call in
+  try/except, logs the failure via `logger.error()` (command name,
+  message, exception type/text) instead of crashing the whole REPL, and
+  returns a graceful "I've logged it" response; `Brain` now wires its own
+  logger into `build_default_registry(...)` so this is on by default, not
+  opt-in. Found and fixed by a 6-agent audit in the same pass (see item 0
+  above for what else the audit found but deferred): `normalize(message)`
+  was running *before* the try block and could still crash `dispatch()` on
+  a non-`str` message; `Logger.log()` could itself crash on an invalid
+  `level` string or an unprintable character reaching `print()`, which
+  would have defeated the whole point of the new error logging. Both
+  fixed. Covered by `tests/test_brain.py::TestFailureFlagging` and new
+  cases in `tests/test_logger.py`.
+- ~~**`forget` deleting entries of the wrong type**~~ — Done (this
+  session, found by the same audit): `LongMemory.forget()` matched by text
+  only, ignoring `type`, so `forget test` after both `test` (a chat
+  message) and `remember test` (a note) existed would silently delete
+  both, not just the note — the exact asymmetry the earlier "Notes-only
+  recall/search" fix (below) was supposed to establish everywhere.
+  `LongMemory.forget()` now takes an optional `entry_type` filter, and
+  `MemoryManager.forget()` passes `entry_type="note"` to match `forget`'s
+  actual UX (removing notes, same as `recall`/`search`). Covered by new
+  cases in `tests/test_memory.py` and `tests/test_brain.py::TestNotes`.
 - ~~**Local LLM as a fallback brain**~~ — Done in v0.0.15 (merged in from
   a parallel `copilot/analyze-project-changes` branch, PR #6, rather than
   built fresh this session): added `OllamaClient`, `LanguageModule`,
