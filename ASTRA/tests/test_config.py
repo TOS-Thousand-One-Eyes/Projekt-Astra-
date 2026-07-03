@@ -140,3 +140,49 @@ def test_present_version_produces_no_load_warning(tmp_path):
     path.write_text(json.dumps({"name": "TestBot", "version": "1.2.3"}), encoding="utf-8")
     config = Config(path=path)
     assert config.load_warnings == []
+
+
+def test_string_false_for_boolean_setting_keeps_the_default(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"use_language_fallback": "false"}), encoding="utf-8")
+    config = Config(path=path)
+    assert config.use_language_fallback is False
+
+
+def test_string_false_for_boolean_setting_produces_a_load_warning(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"use_language_fallback": "false"}), encoding="utf-8")
+    config = Config(path=path)
+    assert any("use_language_fallback" in warning for warning in config.load_warnings)
+
+
+def test_non_numeric_timeout_keeps_the_default_and_warns(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"language_generate_timeout": "240"}), encoding="utf-8")
+    config = Config(path=path)
+    assert config.language_generate_timeout == DEFAULTS["language_generate_timeout"]
+    assert any("language_generate_timeout" in warning for warning in config.load_warnings)
+
+
+def test_boolean_timeout_keeps_the_default_and_warns(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"language_generate_timeout": True}), encoding="utf-8")
+    config = Config(path=path)
+    assert config.language_generate_timeout == DEFAULTS["language_generate_timeout"]
+    assert any("language_generate_timeout" in warning for warning in config.load_warnings)
+
+
+def test_float_timeout_is_accepted(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"language_generate_timeout": 90.5, "version": "1.2.3"}), encoding="utf-8")
+    config = Config(path=path)
+    assert config.language_generate_timeout == 90.5
+    assert config.load_warnings == []
+
+
+def test_non_string_name_keeps_the_default_and_warns(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"name": 42}), encoding="utf-8")
+    config = Config(path=path)
+    assert config.name == DEFAULTS["name"]
+    assert any('"name"' in warning for warning in config.load_warnings)

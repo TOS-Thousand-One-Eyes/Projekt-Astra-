@@ -24,12 +24,6 @@ deliberately deferred — small individually, but bundling six unrelated
 fixes into one commit would violate the single-capability-commit rule, so
 each needs its own pass next time this area is touched:
 
-- **`Config` doesn't validate types from `config.json`**
-  (`config/config.py` `_load()`): a hand-edited
-  `"use_language_fallback": "false"` (string, not JSON `false`) is truthy
-  in Python, so the flag silently flips on against the user's intent, with
-  no warning logged. Same risk for `language_generate_timeout` needing to
-  be numeric.
 - **Ollama's `<think>` stripping can eat literal text that isn't reasoning
   markup** (`utils/ollama_client.py` `THINK_BLOCK_PATTERN` and friends): a
   real answer that happens to contain the literal string `<think>` or
@@ -117,6 +111,19 @@ forgotten, not because it's next.
 
 ## Done
 
+- ~~**`Config` not validating types from `config.json`**~~ — Done (this
+  session, deferred item 0 from the 2026-07-03 audit): a hand-edited
+  `"use_language_fallback": "false"` (string, not JSON `false`) was
+  truthy in Python, silently flipping the flag on against the user's
+  intent. `Config` now type-checks every loaded key against its
+  `DEFAULTS` entry (`_validated()`/`_same_type()`): booleans must be
+  real booleans, numbers must be numeric (a JSON `true` doesn't count as
+  a number even though Python's `bool` is an `int` subclass), strings
+  must be strings — anything else keeps the default and records a
+  `load_warnings` entry that `Brain.start()` surfaces at `WARNING`, per
+  MANIFEST.md's observable-fallbacks rule. Unknown keys (like `version`,
+  which isn't in `DEFAULTS`) pass through untouched. Covered by new
+  cases in `tests/test_config.py`.
 - ~~**`Modules.start_all()`/`stop_all()`'s error handler crashing on a
   module without `.name`**~~ — Done (this session, deferred item 0 from
   the 2026-07-03 audit): the `except` blocks' f-string did `module.name`

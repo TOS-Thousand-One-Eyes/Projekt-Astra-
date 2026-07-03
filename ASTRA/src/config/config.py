@@ -24,7 +24,7 @@ class Config:
         self.path = Path(path)
         self.load_warnings = []
         settings = dict(DEFAULTS)
-        settings.update(self._load())
+        settings.update(self._validated(self._load()))
         self.name = settings["name"]
         self.version = settings.get("version") or UNKNOWN_VERSION
         if not settings.get("version"):
@@ -38,6 +38,27 @@ class Config:
         self.language_base_url = settings["language_base_url"]
         self.language_model = settings["language_model"]
         self.language_generate_timeout = settings["language_generate_timeout"]
+
+    def _validated(self, loaded):
+        valid = {}
+        for key, value in loaded.items():
+            default = DEFAULTS.get(key)
+            if key not in DEFAULTS or self._same_type(value, default):
+                valid[key] = value
+            else:
+                self.load_warnings.append(
+                    f'{self.path.name} has an invalid "{key}" value ({value!r}); '
+                    f'expected a {type(default).__name__}, using the default ({default!r}).'
+                )
+        return valid
+
+    @staticmethod
+    def _same_type(value, default):
+        if isinstance(default, bool):
+            return isinstance(value, bool)
+        if isinstance(default, (int, float)):
+            return isinstance(value, (int, float)) and not isinstance(value, bool)
+        return isinstance(value, type(default))
 
     def _load(self):
         if not self.path.exists():
