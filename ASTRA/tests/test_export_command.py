@@ -23,6 +23,9 @@ def test_export_creates_file_with_expected_keys_and_values(config, memory, tmp_p
         "log_level": config.log_level,
         "log_to_file": config.log_to_file,
         "check_for_updates": config.check_for_updates,
+        "use_language_fallback": config.use_language_fallback,
+        "language_base_url": config.language_base_url,
+        "language_model": config.language_model,
     }
     assert data["facts"] == {"name": "Erik"}
     assert data["long_memory"][0]["entry"] == "buy milk"

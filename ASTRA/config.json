@@ -1,7 +1,10 @@
 {
   "name": "Astra",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "log_level": "INFO",
   "log_to_file": false,
-  "check_for_updates": true
+  "check_for_updates": true,
+  "use_language_fallback": false,
+  "language_base_url": "http://localhost:11434",
+  "language_model": "qwen3:4b"
 }

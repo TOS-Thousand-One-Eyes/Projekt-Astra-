@@ -6,6 +6,73 @@ The format is inspired by "Keep a Changelog".
 
 ---
 
+# v0.0.12 - 03.07.2026
+
+## Added
+
+### A preference fact that actually changes behavior
+
+**Why:** `docs/suggestions.md`'s top open item was to prove the existing
+facts system changes more than greeting copy before a bigger v0.1.1
+preferences subsystem exists.
+
+- `MemoryCommand` now consults the existing `response length` fact for
+  `recall` and `history`
+- `my response length is short` lowers those two summaries from the
+  default last-5 entries to last-3 entries; any other/missing value keeps
+  today's baseline behavior
+- Added regression coverage in `tests/test_brain.py` so both notes-only
+  recall and mixed history summaries are proven to respect the preference
+
+### Local Ollama fallback for unmatched chat
+
+**Why:** `docs/suggestions.md`'s next open item was to make unmatched input
+use a local model instead of the hardcoded `I heard: ...` echo, while still
+preserving Offline First and the already-documented permission convention.
+
+- Added `src/utils/ollama_client.py`: stdlib-only Ollama client
+  (`urllib.request` + `json`), with `GET /api/tags` preflight and
+  `POST /api/generate` inference
+- Added `src/modules/language_module.py`: `LanguageModule(Module)` wraps
+  `OllamaClient`, tracks `available`, raises a clear startup error when
+  Ollama is unreachable, and disables itself if generation later fails
+- `CommandRegistry` now accepts an optional `language_module` and consults
+  it only after normal command matching and the stray-shell-command guard,
+  falling back to the existing echo when the module is absent,
+  unavailable, or returns nothing
+- `Brain` now auto-wires the first module named `language` into the default
+  registry, keeping the coupling one-way (`Brain` still does not know
+  command trigger words)
+- `main.py` now gates the feature behind new `config.json` settings:
+  `use_language_fallback` (default `false` per the permission convention),
+  `language_base_url`, and `language_model`
+- `<think>...</think>` blocks are stripped from local-model output before it
+  is shown, so reasoning-trace models like DeepSeek-R1 degrade cleanly too
+- Added tests in `tests/test_ollama_client.py`, `tests/test_modules.py`,
+  `tests/test_brain.py`, and `tests/test_config.py`
+
+## Changed
+
+### Test hygiene and docs sync
+
+- Deduplicated the shared `StubModule` test double into
+  `tests/conftest.py`, closing the last easy cleanup item from
+  `docs/suggestions.md`
+- Bumped version to `0.0.12` in `pyproject.toml` and `config.json`
+- Updated `docs/PROJECT_STATE.md` and `docs/suggestions.md` to reflect the
+  shipped language fallback, preference-backed memory output, and current
+  next-step list
+
+## Notes
+
+Run the tests with: `python -m pytest` (143 tests)
+
+This version closes the remaining near-term implementation items that were
+listed in `docs/suggestions.md`: the preference-backed behavior proof, the
+local-Ollama fallback brain, and the `StubModule` deduplication cleanup.
+
+---
+
 # v0.0.1 - 01.07.2026
 
 ## Added
@@ -740,4 +807,3 @@ verification pass caught one real bug (the export filename collision,
 above) before it shipped.
 
 ---
-
