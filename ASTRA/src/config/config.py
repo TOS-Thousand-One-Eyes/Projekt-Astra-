@@ -14,6 +14,7 @@ DEFAULTS = {
     "use_language_fallback": False,
     "language_base_url": "http://localhost:11434",
     "language_model": "qwen3:4b",
+    "language_generate_timeout": 240,
 }
 
 
@@ -36,6 +37,7 @@ class Config:
         self.use_language_fallback = settings["use_language_fallback"]
         self.language_base_url = settings["language_base_url"]
         self.language_model = settings["language_model"]
+        self.language_generate_timeout = settings["language_generate_timeout"]
 
     def _load(self):
         if not self.path.exists():

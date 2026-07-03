@@ -4,7 +4,8 @@
   "log_level": "INFO",
   "log_to_file": false,
   "check_for_updates": true,
-  "use_language_fallback": false,
+  "use_language_fallback": true,
   "language_base_url": "http://localhost:11434",
-  "language_model": "qwen3:4b"
+  "language_model": "qwen3:4b",
+  "language_generate_timeout": 240
 }

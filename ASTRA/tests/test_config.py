@@ -75,6 +75,7 @@ def test_language_fallback_defaults(tmp_path):
     assert config.use_language_fallback == DEFAULTS["use_language_fallback"]
     assert config.language_base_url == DEFAULTS["language_base_url"]
     assert config.language_model == DEFAULTS["language_model"]
+    assert config.language_generate_timeout == DEFAULTS["language_generate_timeout"]
 
 
 def test_loads_language_fallback_settings_from_file(tmp_path):
@@ -85,6 +86,7 @@ def test_loads_language_fallback_settings_from_file(tmp_path):
                 "use_language_fallback": True,
                 "language_base_url": "http://127.0.0.1:11434",
                 "language_model": "qwen3:8b",
+                "language_generate_timeout": 90,
             }
         ),
         encoding="utf-8",
@@ -93,6 +95,7 @@ def test_loads_language_fallback_settings_from_file(tmp_path):
     assert config.use_language_fallback is True
     assert config.language_base_url == "http://127.0.0.1:11434"
     assert config.language_model == "qwen3:8b"
+    assert config.language_generate_timeout == 90
 
 
 def test_malformed_json_falls_back_to_defaults(tmp_path):
