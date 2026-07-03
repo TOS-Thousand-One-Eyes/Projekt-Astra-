@@ -63,6 +63,15 @@ def test_long_memory_wrong_shape_json_sets_a_load_warning(tmp_path):
     assert "long_memory.json" in memory.load_warning
 
 
+def test_long_memory_falls_back_to_empty_on_wrong_element_shape_json(tmp_path):
+    path = tmp_path / "long_memory.json"
+    path.write_text("[1, 2, 3]", encoding="utf-8")
+    memory = LongMemory(path)
+    assert memory.recall() == []
+    assert memory.load_warning is not None
+    assert "long_memory.json" in memory.load_warning
+
+
 def test_long_memory_save_uses_temp_file_then_replaces_target(tmp_path):
     path = tmp_path / "long_memory.json"
     memory = LongMemory(path)

@@ -57,8 +57,8 @@ class LongMemory:
             self.entries = []
             self.load_warning = f"{self.path.name} could not be loaded ({error}); starting with empty long-term memory."
             return
-        if not isinstance(loaded, list):
+        if not isinstance(loaded, list) or not all(isinstance(item, dict) for item in loaded):
             self.entries = []
-            self.load_warning = f"{self.path.name} does not contain a JSON list; starting with empty long-term memory."
+            self.load_warning = f"{self.path.name} does not contain a JSON list of entries; starting with empty long-term memory."
             return
         self.entries = loaded

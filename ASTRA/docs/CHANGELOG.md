@@ -1089,3 +1089,42 @@ tag is stripped, a blank message never reaches `generate()`), not just
 must prove the fallback is visible, not just survivable. A second round
 of 6 fresh audit agents follows to re-verify these fixes before
 anything is reported back for a push decision.
+
+---
+
+# v0.0.17 - 03.07.2026
+
+## Fixed
+
+### Two more real bugs found by the second (re-verification) audit round
+
+**Why:** The second round of 6 agents didn't just confirm the v0.0.16
+fixes — two of them found the v0.0.16 fixes were each one step short of
+complete, in the same general direction (a shape check that covered the
+container but not its contents; a tag-stripping fix that covered one
+malformed case but not its mirror image).
+
+- **`LongMemory.load()`'s wrong-shape guard only checked the top-level
+  JSON was a list, not that each element was a dict** — a file like
+  `[1, 2, 3]` passed the guard and landed straight in `self.entries`.
+  Worse than the original bug: `Brain.start()`'s `_log_last_seen()`
+  unconditionally reads `long_entries[-1]["timestamp"]`, so this
+  crashed the entire app at startup, before any user input, with no
+  warning printed. Now validates every element is a dict too, falling
+  back to empty state with a `load_warning` like every other case.
+- **The unclosed-`<think>`-tag fix only handled a missing closing tag,
+  not a missing opening one** — a stray `</think>` with no matching
+  `<think>` before it (a malformed model response, not currently
+  reachable through the non-streamed `/api/generate` call but worth
+  covering defensively) still leaked straight through. `OllamaClient`
+  now also strips up to an orphaned closing tag.
+
+## Notes
+
+Run the tests with: `python -m pytest` (187 tests)
+
+Both of these were found by agents specifically instructed to
+re-verify round-1 fixes rather than trust them — reinforces that
+"tests pass" and "the fix is complete" aren't the same claim; the
+round-1 fixes for these two spots were real improvements, just not the
+full shape of the problem.

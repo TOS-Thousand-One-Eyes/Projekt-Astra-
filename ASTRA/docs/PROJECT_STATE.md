@@ -1,7 +1,7 @@
 # PROJECT_STATE.md
 
 # ASTRA
-Version: 0.0.16
+Version: 0.0.17
 Status: Active Development
 
 ---
@@ -284,7 +284,7 @@ ASTRA/
   discover them as regular packages.
 
 ### Tests
-- pytest suite (185 tests) in `tests/`, configured by `pytest.ini`.
+- pytest suite (187 tests) in `tests/`, configured by `pytest.ini`.
 - Covers lifecycle transitions, commands, facts, notes, memory search/
   forget/stats, export, preference-backed output length, modules, local
   Ollama fallback, session summary, startup briefing, memory persistence
@@ -305,7 +305,7 @@ ASTRA/
 ### Startup
 main.py only:
 - creates Logger, Config, MemoryManager, Modules
-- conditionally adds `LanguageModule(OllamaClient(...))` when
+- conditionally adds `LanguageModule(OllamaClient(...), logger)` when
   `config.use_language_fallback` is enabled
 - creates Brain and calls brain.start()
 - loops `while brain.is_running`

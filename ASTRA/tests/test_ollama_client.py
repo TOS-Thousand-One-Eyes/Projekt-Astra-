@@ -76,6 +76,21 @@ def test_generate_strips_unclosed_think_block_preceding_real_content():
     assert "<think>" not in response
 
 
+def test_generate_strips_orphan_closing_think_tag_with_no_opener():
+    client = OllamaClient(
+        "http://localhost:11434",
+        "qwen3:4b",
+        request_json=lambda url, method="GET", data=None, timeout=3: {
+            "response": "stray reasoning fragment</think>Actual answer"
+        },
+    )
+
+    response = client.generate("hello")
+
+    assert response == "Actual answer"
+    assert "</think>" not in response
+
+
 def test_generate_raises_on_empty_cleaned_response():
     client = OllamaClient(
         "http://localhost:11434",
