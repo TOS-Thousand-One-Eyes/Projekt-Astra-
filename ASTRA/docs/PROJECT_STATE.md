@@ -1,7 +1,7 @@
 # PROJECT_STATE.md
 
 # ASTRA
-Version: 0.0.12
+Version: 0.0.13
 Status: Active Development
 
 ---
@@ -137,6 +137,13 @@ ASTRA/
   `UNKNOWN_VERSION = "0.0.0-unknown"` sentinel if the key is missing. See
   the "RELEASE CHECKLIST" in `docs/MANIFEST.md` for how the version is
   kept in sync with `pyproject.toml` (by hand, not by code).
+- Every fallback above (malformed JSON, wrong-shape JSON, missing
+  version) is recorded in `self.load_warnings` — `Config` is constructed
+  before `Logger` exists in `main.py`, so it can't log directly, but
+  `Brain.start()` (which has both) logs each one at `WARNING` right
+  after "Config loaded from...". A silently-defaulted config used to
+  look identical to a correctly-configured one; now it doesn't (see
+  MANIFEST.md's "OBSERVABLE FALLBACKS").
 
 ### Modules
 - `Module` (`src/modules/module.py`) is the base class for a Brain-managed
@@ -187,6 +194,11 @@ ASTRA/
   `"timestamp"` keys, not just `"type"` — a hand-edited or
   oddly-shaped `long_memory.json` entry can't crash `recall`/`search`/
   `history`/`memory stats` anymore.
+- A corrupt-file fallback on `LongMemory`/`Facts` sets `self.load_warning`
+  (a data-loss event, not routine status); `MemoryManager.load_warnings()`
+  aggregates both, and `Brain.start()` logs each at `WARNING` right after
+  "Memory loaded: N entries...". Resetting to empty memory used to be
+  indistinguishable from a genuinely empty first run — now it isn't.
 
 ### Export
 - `ExportCommand` (`export` trigger) bundles `Config`'s settings
@@ -208,9 +220,11 @@ ASTRA/
 - An invalid `log_level` (e.g. a `config.json` typo) falls back to `INFO`
   instead of crashing on the first log call.
 - A failure writing to the log file (disk full, permission denied, a
-  blocked path) is caught and silently skipped rather than crashing the
-  whole running session — console output and the in-memory `logs` list
-  are unaffected either way.
+  blocked path) doesn't crash the whole running session — but it isn't
+  silent either: it's logged once as a `WARNING` (console + in-memory
+  `logs`, since the file path is the thing that's broken) and
+  `log_to_file` is disabled for the rest of the session so the failure
+  doesn't repeat on every subsequent call.
 - Convenience methods: `debug()`, `info()`, `warning()`, `error()`.
 - Optional file output to `data/astra.log` (path injectable for testing),
   controlled by `config.json`'s `log_level` and `log_to_file` keys.
@@ -234,9 +248,12 @@ ASTRA/
   entry rather than a discarded exception.
 - An unparseable local version (the `UNKNOWN_VERSION` sentinel, e.g. on a
   fresh checkout with no `version` in `config.json`) is checked first and
-  logged at `info` ("Skipping update check: local version is unknown.")
-  instead of silently failing forever at an invisible `debug` level — no
-  network call is even made in that case.
+  logged at `warning` (visible by default, not an invisible `debug` level)
+  — it's a configuration problem worth noticing, not a routine status.
+  The comparison against remote is skipped (nothing to compare against),
+  but the check still fetches and reports the latest available version
+  on its own, so a genuinely reachable update isn't hidden just because
+  the local version is unknown.
 - Controlled by `config.json`'s `check_for_updates` key (default `true`);
   when `false`, `main.py` never constructs an `UpdateChecker` and no
   network call happens at all.
@@ -257,12 +274,14 @@ ASTRA/
   discover them as regular packages.
 
 ### Tests
-- pytest suite (148 tests) in `tests/`, configured by `pytest.ini`.
+- pytest suite (162 tests) in `tests/`, configured by `pytest.ini`.
 - Covers lifecycle transitions, commands, facts, notes, memory search/
   forget/stats, export, modules, session summary, startup briefing,
   memory persistence (including corrupt-file fallback and entries
-  missing keys), and config loading (including malformed-JSON and
-  wrong-shape-JSON fallback).
+  missing keys), config loading (including malformed-JSON and
+  wrong-shape-JSON fallback), and that every fallback above is actually
+  logged, not just survived (`load_warnings` reaching a `WARNING` log
+  line, not merely "didn't raise").
 - Run with: `python -m pytest`
 
 ### Continuous Integration

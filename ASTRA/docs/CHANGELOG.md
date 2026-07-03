@@ -835,3 +835,80 @@ version.
 
 ---
 
+# v0.0.13 - 03.07.2026
+
+## Fixed
+
+### Fallbacks were surviving errors but hiding them — now they're loud
+
+**Why:** Erik caught this directly, running the real app: a startup log
+showing `Astra v0.0.0-unknown is starting...` with no explanation why.
+The root cause was several fallback paths added in v0.0.11/v0.0.12
+(`Config`, `LongMemory`, `Facts`, `Logger`, `UpdateChecker`) that all
+correctly avoided crashing, but gave zero indication that anything had
+gone wrong — a misconfigured `config.json` looked identical to a
+correctly-configured one from the outside. "Didn't crash" isn't the
+same as "fine" if the failure is invisible. New permanent rule in
+`docs/MANIFEST.md`: "OBSERVABLE FALLBACKS."
+
+- **`Config`** gained `self.load_warnings` (a list): set when
+  `config.json` is malformed, isn't a JSON object, or is missing a
+  `"version"` value. `Config` is constructed before `Logger` exists in
+  `main.py`, so it can't log directly — the warning rides on the object
+  itself until something downstream can surface it.
+- **`LongMemory`/`Facts`** gained `self.load_warning`: set when a
+  corrupt file falls back to empty state (this is data loss, not a
+  routine "first run" case — those stay silent, correctly, since an
+  actually-missing file isn't an error). `MemoryManager.load_warnings()`
+  aggregates both.
+- **`Brain.start()`** now logs every warning from `config.load_warnings`
+  and `memory.load_warnings()` at `WARNING`, right alongside the
+  existing "Config loaded from..." / "Memory loaded: N entries..." lines
+  — the natural place, since `main.py` stays as simple as possible per
+  Design Decisions.
+- **`Logger`**'s own file-write failure (disk full, permission denied, a
+  blocked path) used to be caught and silently passed. Now it's logged
+  once as a `WARNING` (console + in-memory `logs`, since the file
+  itself is what's broken) and `log_to_file` is disabled for the rest
+  of the session, so the failure doesn't repeat on every call.
+- **`UpdateChecker`**'s unknown-local-version case was already visible
+  (an `info`-level "Skipping update check" message, added in v0.0.12) but
+  underdelivered on the check's actual purpose. Upgraded to `warning`
+  (it's a config problem, not routine status) and it now still fetches
+  and reports the latest available version — skipping only the
+  meaningless "are you up to date" comparison, not the whole check.
+- 13 new regression tests, several of which specifically assert a
+  `WARNING` log line appears (not just "didn't raise") — a fallback
+  test that only checks survival isn't enough per the new convention.
+
+## Added
+
+### Two follow-ups written down, not built
+
+- `docs/suggestions.md` #1: a `diagnostics`/`status` chat trigger to
+  read `Config.load_warnings`/`MemoryManager.load_warnings()`/whether
+  `Logger` disabled file output — all already tracked, just not
+  queryable after the startup log scrolls by. Preview of roadmap
+  v0.1.8 ("Observability").
+- `docs/suggestions.md` #2: `MemoryCommand._entry_limit()`'s non-string
+  `response length` fact guard still falls back silently — deliberately
+  not fixed this round, since `Command` subclasses don't take a
+  `logger` today and giving every command one is a real DI change, not
+  a one-line fix. Written down instead of silently left as a loose end.
+
+## Changed
+
+- Bumped version to `0.0.13` in `pyproject.toml` and `config.json`.
+
+## Notes
+
+Run the tests with: `python -m pytest` (162 tests)
+
+Reproduced the exact reported scenario before calling this fixed: a
+`config.json` missing its `"version"` key now logs
+`WARNING config.json has no "version" value; update checks will be
+skipped until it's set.` immediately after `Astra v0.0.0-unknown is
+starting...`, instead of leaving that line unexplained.
+
+---
+

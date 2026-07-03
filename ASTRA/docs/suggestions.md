@@ -12,7 +12,36 @@ Done items are kept at the bottom for history.
 
 ---
 
-## 1. Local LLM as a fallback brain
+## 1. A `diagnostics`/`status` command to see warnings after startup scrolls by (preview of roadmap v0.1.8 "Observability")
+
+Config/memory load warnings (see `docs/CHANGELOG.md`'s latest entry) are
+only visible in the startup log stream — if the console scrolls, or
+`log_to_file` is off, there's no way to ask "did anything go wrong?"
+later in a long-running session. `Config.load_warnings`,
+`MemoryManager.load_warnings()`, and whether `Logger` had to disable
+`log_to_file` after a write failure are all already tracked in memory
+right now — a `diagnostics`/`status` chat trigger just needs to read
+and report them on demand, the same way `memory stats` already reports
+`LongMemory`'s shape. No new tracking, just a new way to ask for what's
+already being tracked. Small, reuses what exists, and is the obvious
+first step toward roadmap v0.1.8's "internal health report."
+
+## 2. `MemoryCommand`'s non-string `response length` fact silently falls back, unlike everything else fixed this session
+
+`_entry_limit()` guards against a non-string `response length` fact
+value (a hand-edited `facts.json`) with `isinstance(preference, str)`,
+falling back to the default limit — safely, but silently, the exact
+pattern just fixed everywhere else this session (see MANIFEST.md's
+"OBSERVABLE FALLBACKS"). Deliberately not fixed today: `Command`
+subclasses don't currently take a `logger` (only `MemoryCommand`/
+`GreetingCommand`'s `config`/`memory`), so warning here would mean
+giving every command a logger dependency — a real DI change, not a
+one-line fix, and out of scope for a single edge case reachable only
+by manually corrupting `facts.json`. Worth deciding deliberately (give
+`Command` a logger now, generalizing the pattern) rather than
+one-off-ing a workaround, next time this file is touched.
+
+## 3. Local LLM as a fallback brain
 
 Per the "Offline First" principle: instead of `I heard: ...` for unmatched
 input, a `LanguageModule` should pass the message to a local Ollama model.
@@ -88,11 +117,11 @@ only, same as `UpdateChecker`.
 This is a design only, not yet implemented — no `LanguageModule`,
 `OllamaClient`, or registry wiring code exists yet.
 
-## 2. TFT coaching via screen access (correctly placed: far out, two dependencies)
+## 4. TFT coaching via screen access (correctly placed: far out, two dependencies)
 
 Erik's real near-term want, raised this session: Astra watching the screen
 during a TFT match and coaching live. Honest scope check before this goes
-anywhere: it needs **both** a working local LLM (#1 above) **and** Vision
+anywhere: it needs **both** a working local LLM (#3 above) **and** Vision
 (roadmap v0.2.2 — "OCR, screenshots, basic 'what's on screen'"), neither of
 which exists yet. It's also not really an LLM-reasoning problem underneath
 — TFT patches every ~2 weeks and rotates trait/item sets every ~4 months,
@@ -103,7 +132,7 @@ Correctly sequenced this stays a v0.2.2+ idea, not something to reach for
 early — flagging it here so it's on record and roadmap-placed rather than
 forgotten, not because it's next.
 
-## 3. Deduplicate the `StubModule` test double
+## 5. Deduplicate the `StubModule` test double
 
 `tests/test_modules.py` and `tests/test_brain.py::TestModulesLifecycle`
 each define an identical local `StubModule(Module)` (`name`/`started`/
