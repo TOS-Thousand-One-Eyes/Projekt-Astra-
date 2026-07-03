@@ -603,6 +603,69 @@ class TestPreferences:
         assert "note 2" not in response
 
 
+class TestDiagnostics:
+
+    @pytest.fixture
+    def clean_config(self, tmp_path):
+        import json
+
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps({"version": "1.2.3"}), encoding="utf-8")
+        from config.config import Config
+
+        return Config(path=path)
+
+    def test_status_reports_all_clear_when_nothing_went_wrong(self, clean_config, memory):
+        brain = Brain(Logger(), clean_config, memory, Modules(Logger()))
+        brain.start()
+        response = brain.receive("status")
+        assert "no warnings" in response
+
+    def test_diagnostics_trigger_works_like_status(self, clean_config, memory):
+        brain = Brain(Logger(), clean_config, memory, Modules(Logger()))
+        brain.start()
+        assert brain.receive("diagnostics") == brain.receive("status")
+
+    def test_status_reports_config_warnings_after_startup(self, running_brain):
+        # The conftest config points at a missing file, so it carries the
+        # "no version value" load warning - status should resurface it.
+        response = running_brain.receive("status")
+        assert "config:" in response
+        assert "version" in response
+
+    def test_status_reports_memory_warnings_after_startup(self, clean_config, tmp_path):
+        (tmp_path / "long_memory.json").write_text("{not valid json", encoding="utf-8")
+        memory = MemoryManager(data_dir=tmp_path)
+        brain = Brain(Logger(), clean_config, memory, Modules(Logger()))
+        brain.start()
+
+        response = brain.receive("status")
+
+        assert "memory:" in response
+        assert "long_memory.json" in response
+
+    def test_status_reports_file_logging_disabled_after_a_write_failure(self, clean_config, memory, tmp_path):
+        clean_config.log_to_file = True
+        logger = Logger(log_to_file=True, log_path=tmp_path / "blocked" / "astra.log")
+        (tmp_path / "blocked").write_text("a file where the log directory should be", encoding="utf-8")
+        brain = Brain(logger, clean_config, memory, Modules(Logger()))
+        brain.start()
+
+        response = brain.receive("status")
+
+        assert "file logging is off" in response
+
+    def test_status_does_not_report_file_logging_when_it_is_off_by_config(self, clean_config, memory):
+        brain = Brain(Logger(), clean_config, memory, Modules(Logger()))
+        brain.start()
+        response = brain.receive("status")
+        assert "file logging" not in response
+
+    def test_status_is_listed_in_help(self, running_brain):
+        response = running_brain.receive("help")
+        assert "diagnostics" in response
+
+
 class TestSessionSummary:
 
     def test_stop_logs_session_summary_with_counts(self, running_brain):

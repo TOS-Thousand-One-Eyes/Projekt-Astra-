@@ -45,20 +45,6 @@ field), so it still can't distinguish "note" from "chat" the way
 `LongMemory` now can — the fix above only stopped `forget` from touching
 `short_memory` on a no-op, it didn't make `short_memory` type-aware.
 
-## 1. A `diagnostics`/`status` command to see warnings after startup scrolls by (preview of roadmap v0.1.8 "Observability")
-
-Config/memory load warnings (see `docs/CHANGELOG.md`'s latest entry) are
-only visible in the startup log stream — if the console scrolls, or
-`log_to_file` is off, there's no way to ask "did anything go wrong?"
-later in a long-running session. `Config.load_warnings`,
-`MemoryManager.load_warnings()`, and whether `Logger` had to disable
-`log_to_file` after a write failure are all already tracked in memory
-right now — a `diagnostics`/`status` chat trigger just needs to read
-and report them on demand, the same way `memory stats` already reports
-`LongMemory`'s shape. No new tracking, just a new way to ask for what's
-already being tracked. Small, reuses what exists, and is the obvious
-first step toward roadmap v0.1.8's "internal health report."
-
 ## 3. TFT coaching via screen access (correctly placed: far out, two dependencies)
 
 Erik's real near-term want, raised this session: Astra watching the screen
@@ -78,6 +64,18 @@ forgotten, not because it's next.
 
 ## Done
 
+- ~~**A `diagnostics`/`status` command to see warnings after startup
+  scrolls by**~~ — Done (this session, was open item 1; first concrete
+  step toward roadmap v0.1.8 "Observability"): new `DiagnosticsCommand`
+  (`diagnostics` / `status` triggers) re-reports on demand what's
+  already tracked in memory — `Config.load_warnings`,
+  `MemoryManager.load_warnings()`, and whether `Logger` had to disable
+  `log_to_file` after a write failure (detected by comparing
+  `config.log_to_file` asking for file logging against
+  `logger.log_to_file` having turned itself off — no new tracking
+  anywhere, exactly as scoped). Wired into `build_default_registry()`
+  and listed in `help`. Covered by
+  `tests/test_brain.py::TestDiagnostics`.
 - ~~**`Command` gets an optional logger; `MemoryCommand`'s non-string
   `response length` fact no longer falls back silently**~~ — Done (this
   session, was open item 2): decided the general way rather than

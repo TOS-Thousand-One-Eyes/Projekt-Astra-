@@ -1,4 +1,5 @@
 from commands.base import DispatchResult, looks_like_shell_command, normalize
+from commands.diagnostics_command import DiagnosticsCommand
 from commands.exit_command import ExitCommand
 from commands.export_command import ExportCommand
 from commands.fact_command import FactCommand
@@ -54,10 +55,11 @@ def build_default_registry(config, memory, language_module=None, logger=None):
     greeting = GreetingCommand(config, memory, logger=logger)
     farewell = ExitCommand(config, logger=logger)
     export = ExportCommand(config, memory, logger=logger)
-    help_command = HelpCommand([fact, note, greeting, farewell, export], logger=logger)
+    diagnostics = DiagnosticsCommand(config, memory, logger=logger)
+    help_command = HelpCommand([fact, note, greeting, farewell, export, diagnostics], logger=logger)
 
     return CommandRegistry(
-        [fact, note, help_command, greeting, farewell, export],
+        [fact, note, help_command, greeting, farewell, export, diagnostics],
         language_module=language_module,
         logger=logger,
     )
