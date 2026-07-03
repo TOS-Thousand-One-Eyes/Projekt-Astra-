@@ -83,7 +83,6 @@ class Brain:
         self.memory.remember(message)
         self.memory.remember(result.response)
         self._message_count += 2
-        self.logger.log(f"You: {message}")
         self.logger.log(f"{self.config.name}: {result.response}")
 
         if result.stops_brain:

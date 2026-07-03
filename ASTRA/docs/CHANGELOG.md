@@ -912,3 +912,31 @@ starting...`, instead of leaving that line unexplained.
 
 ---
 
+# v0.0.14 - 03.07.2026
+
+## Fixed
+
+- `Brain.receive()` logged `You: {message}` at INFO right after the
+  terminal's own `input("You: ")` prompt had already echoed the same
+  text — every message a user typed appeared twice in a row for no
+  reason. Erik caught this running the real app ("why should It get
+  my text twice?"). Removed the redundant log call; the assistant's
+  reply is still logged (it's the only line that's actually new
+  information).
+- Confirmed the "Astra doesn't know about a new GitHub version" report
+  from the same session was not a bug: the update checker compares
+  local vs. the *published* `config.json` on GitHub, and the newer
+  local commits (through v0.0.13) hadn't been pushed yet, so "up to
+  date" was the correct answer at the time. Resolves itself once this
+  round is pushed.
+
+## Changed
+
+- Bumped version to `0.0.14` in `pyproject.toml` and `config.json`.
+
+## Notes
+
+Run the tests with: `python -m pytest` (162 tests)
+
+---
+

@@ -1,7 +1,7 @@
 # PROJECT_STATE.md
 
 # ASTRA
-Version: 0.0.13
+Version: 0.0.14
 Status: Active Development
 
 ---
