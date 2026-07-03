@@ -24,13 +24,6 @@ deliberately deferred — small individually, but bundling six unrelated
 fixes into one commit would violate the single-capability-commit rule, so
 each needs its own pass next time this area is touched:
 
-- **Ollama's `<think>` stripping can eat literal text that isn't reasoning
-  markup** (`utils/ollama_client.py` `THINK_BLOCK_PATTERN` and friends): a
-  real answer that happens to contain the literal string `<think>` or
-  `</think>` (e.g. an answer *about* prompt formats) gets truncated or
-  deleted, since the regexes can't distinguish real prose from reasoning
-  fragments. No clean fix without a more structured way to detect genuine
-  reasoning blocks from the model.
 - **`update_checker`'s version comparison breaks on differing segment
   counts** (`utils/update_checker.py` `_parse`): Python tuple comparison
   makes `(1, 2) < (1, 2, 0)`, so `"1.2"` vs `"1.2.0"` would spuriously
@@ -111,6 +104,25 @@ forgotten, not because it's next.
 
 ## Done
 
+- ~~**Ollama `<think>` stripping eating literal text that isn't reasoning
+  markup**~~ — Done (this session, deferred item 0 from the 2026-07-03
+  audit): the audit said "no clean fix without structure", but there *is*
+  structure to use — reasoning models emit their `<think>` block at the
+  *start* of the response, never after real content. All three stripping
+  patterns in `utils/ollama_client.py` are now anchored to the leading
+  position (`\A`), so a literal `<think>`/`</think>` later in a real
+  answer (e.g. an answer *about* prompt formats) is kept as content
+  instead of truncating everything after/before it. The
+  template-swallowed-opener case (bare reasoning ending in a lone
+  `</think>`) is still stripped, but only when no `<think>` opener
+  appeared anywhere in the raw response — if it did, a remaining
+  `</think>` is literal content. One old test asserting the buggy
+  truncation (`preamble<think>cut off` → `preamble`) was updated: a
+  mid-text `<think>` is now a literal mention, not markup. Known residual
+  (inherent, documented in the code comment): an answer that *opens* with
+  prose ending in a literal `</think>` and never mentions `<think>` is
+  indistinguishable from the swallowed-opener case and still loses its
+  prefix. Covered by new cases in `tests/test_ollama_client.py`.
 - ~~**`Config` not validating types from `config.json`**~~ — Done (this
   session, deferred item 0 from the 2026-07-03 audit): a hand-edited
   `"use_language_fallback": "false"` (string, not JSON `false`) was

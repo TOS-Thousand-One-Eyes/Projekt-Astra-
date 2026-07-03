@@ -61,19 +61,49 @@ def test_generate_strips_unclosed_think_block():
         client.generate("hello")
 
 
-def test_generate_strips_unclosed_think_block_preceding_real_content():
+def test_generate_keeps_a_mid_text_literal_think_tag_as_content():
+    # Reasoning models emit <think> at the start; a <think> appearing after
+    # real content is a literal mention, not markup - it used to truncate
+    # everything after it.
     client = OllamaClient(
         "http://localhost:11434",
         "qwen3:4b",
         request_json=lambda url, method="GET", data=None, timeout=3: {
-            "response": "preamble\n<think>reasoning that got cut off"
+            "response": "Reasoning models wrap their reasoning in <think> tags."
         },
     )
 
     response = client.generate("hello")
 
-    assert response == "preamble"
-    assert "<think>" not in response
+    assert response == "Reasoning models wrap their reasoning in <think> tags."
+
+
+def test_generate_keeps_literal_tags_in_an_answer_after_a_real_think_block():
+    client = OllamaClient(
+        "http://localhost:11434",
+        "qwen3:4b",
+        request_json=lambda url, method="GET", data=None, timeout=3: {
+            "response": "<think>how do I explain this</think>Wrap reasoning in <think> and </think> tags."
+        },
+    )
+
+    response = client.generate("hello")
+
+    assert response == "Wrap reasoning in <think> and </think> tags."
+
+
+def test_generate_strips_repeated_leading_think_blocks():
+    client = OllamaClient(
+        "http://localhost:11434",
+        "qwen3:4b",
+        request_json=lambda url, method="GET", data=None, timeout=3: {
+            "response": "<think>first</think>\n<think>second</think>\nActual answer"
+        },
+    )
+
+    response = client.generate("hello")
+
+    assert response == "Actual answer"
 
 
 def test_generate_strips_orphan_closing_think_tag_with_no_opener():

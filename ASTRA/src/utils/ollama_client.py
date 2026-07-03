@@ -2,9 +2,14 @@ import json
 import re
 import urllib.request
 
-THINK_BLOCK_PATTERN = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
-UNCLOSED_THINK_PATTERN = re.compile(r"<think>.*", re.IGNORECASE | re.DOTALL)
-ORPHAN_THINK_CLOSE_PATTERN = re.compile(r"^.*?</think>", re.IGNORECASE | re.DOTALL)
+# Reasoning models emit their <think> block at the start of the response
+# (or, when the prompt template swallows the opening tag, as bare reasoning
+# ending in a lone </think>). All three patterns are anchored to the leading
+# position so a literal "<think>"/"</think>" later in a real answer (e.g. an
+# answer *about* prompt formats) is kept as content, not eaten as markup.
+LEADING_THINK_BLOCK_PATTERN = re.compile(r"\A\s*<think>.*?</think>", re.IGNORECASE | re.DOTALL)
+LEADING_UNCLOSED_THINK_PATTERN = re.compile(r"\A\s*<think>.*", re.IGNORECASE | re.DOTALL)
+LEADING_ORPHAN_THINK_CLOSE_PATTERN = re.compile(r"\A.*?</think>", re.IGNORECASE | re.DOTALL)
 
 
 class OllamaClient:
@@ -52,12 +57,26 @@ class OllamaClient:
         if not isinstance(response, str):
             raise ValueError("Ollama returned an invalid response.")
 
-        cleaned = THINK_BLOCK_PATTERN.sub("", response)
-        cleaned = UNCLOSED_THINK_PATTERN.sub("", cleaned)
-        cleaned = ORPHAN_THINK_CLOSE_PATTERN.sub("", cleaned).strip()
+        cleaned = self._strip_reasoning(response)
         if not cleaned:
             raise ValueError("Ollama returned an empty response.")
         return cleaned
+
+    @staticmethod
+    def _strip_reasoning(response):
+        cleaned = response
+        while True:
+            stripped = LEADING_THINK_BLOCK_PATTERN.sub("", cleaned, count=1)
+            if stripped == cleaned:
+                break
+            cleaned = stripped
+        cleaned = LEADING_UNCLOSED_THINK_PATTERN.sub("", cleaned, count=1)
+        # A lone </think> is only reasoning markup when the opening tag never
+        # appeared at all (the template-swallowed-opener case); if the response
+        # had a real <think> anywhere, a remaining </think> is literal content.
+        if "<think>" not in response.lower():
+            cleaned = LEADING_ORPHAN_THINK_CLOSE_PATTERN.sub("", cleaned, count=1)
+        return cleaned.strip()
 
     @staticmethod
     def _request_json(url, method="GET", data=None, timeout=3):
