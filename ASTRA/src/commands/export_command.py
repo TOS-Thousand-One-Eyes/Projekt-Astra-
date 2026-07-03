@@ -36,6 +36,7 @@ class ExportCommand(Command):
                 "use_language_fallback": self.config.use_language_fallback,
                 "language_base_url": self.config.language_base_url,
                 "language_model": self.config.language_model,
+                "language_generate_timeout": self.config.language_generate_timeout,
             },
             "facts": self.memory.all_facts(),
             "long_memory": self.memory.recall_long(),

@@ -26,6 +26,7 @@ def test_export_creates_file_with_expected_keys_and_values(config, memory, tmp_p
         "use_language_fallback": config.use_language_fallback,
         "language_base_url": config.language_base_url,
         "language_model": config.language_model,
+        "language_generate_timeout": config.language_generate_timeout,
     }
     assert data["facts"] == {"name": "Erik"}
     assert data["long_memory"][0]["entry"] == "buy milk"
