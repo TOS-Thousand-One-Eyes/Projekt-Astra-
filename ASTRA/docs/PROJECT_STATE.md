@@ -1,7 +1,7 @@
 # PROJECT_STATE.md
 
 # ASTRA
-Version: 0.0.11
+Version: 0.0.12
 Status: Active Development
 
 ---
@@ -94,6 +94,10 @@ ASTRA/
   and (optionally) a CommandRegistry.
 - On `stop()`, logs a session summary: messages exchanged, new facts
   learned, and session duration (via `utils/time_format.format_duration`).
+  Message count is tracked directly by `Brain` itself (incremented once
+  per `receive()`), not inferred from short-memory length — a command
+  like `remember <note>` writes an extra memory entry beyond the normal
+  message/response pair, which used to inflate the count.
 - On `start()`, logs the current date/time and, using the last LongMemory
   entry's timestamp, how long ago the previous session ended (or "This is
   our first session!" if LongMemory is empty).
@@ -116,12 +120,17 @@ ASTRA/
 - `ExportCommand` (`export` trigger) bundles `Config`'s settings, all facts,
   and the full long-term memory into one timestamped JSON file under
   `data/exports/` — see "Export" under Memory below.
+- `FactCommand`'s `my <thing> is <value>` / `what is my <thing>` regexes
+  strip a whole run of trailing punctuation (`[.!?]*$`), not just one
+  character — matches `commands/base.py`'s shared `normalize()`, so
+  `my mood is great!!` learns `great`, not `great!`.
 
 ### Config
 - Loads settings from `config.json` in the project root.
-- Missing file, missing keys, or malformed JSON all fall back to
-  `DEFAULTS` in code (a corrupt/hand-edited `config.json` no longer
-  crashes startup — it's treated the same as a missing file).
+- Missing file, missing keys, malformed JSON, or syntactically-valid
+  JSON that isn't an object (e.g. `null`, a bare number, a list) all
+  fall back to `DEFAULTS` in code (a corrupt/hand-edited `config.json`
+  no longer crashes startup — it's treated the same as a missing file).
 - File path is injectable for testing.
 - `version` is the one exception: it's not in `DEFAULTS` — `config.json`
   is the sole runtime source of truth, falling back to an honest
@@ -165,10 +174,19 @@ ASTRA/
   `history` trigger shows the unfiltered last 5 entries (notes + chat); a
   `memory stats` trigger reports total/note/chat counts and the
   oldest/newest entry timestamps.
+- `recall`/`history`'s last-5 cap is a preference: teaching the fact
+  `my response length is short` shortens both to the last 2 entries
+  instead (`MemoryCommand._entry_limit()`, first proof that a taught
+  fact generalizes beyond `GreetingCommand`'s `name` usage).
 - `LongMemory.save()`/`Facts.save()` write atomically (temp file +
   `os.replace`) and `load()` falls back to empty state instead of
   crashing on truncated/corrupt JSON — a mid-write crash or hand-edited
   bad file no longer permanently bricks startup.
+- `LongMemory.search()`/`forget()` and `MemoryCommand`'s formatting/stats
+  helpers all use `.get(...)` with fallbacks for an entry's `"entry"`/
+  `"timestamp"` keys, not just `"type"` — a hand-edited or
+  oddly-shaped `long_memory.json` entry can't crash `recall`/`search`/
+  `history`/`memory stats` anymore.
 
 ### Export
 - `ExportCommand` (`export` trigger) bundles `Config`'s settings
@@ -180,6 +198,8 @@ ASTRA/
   before any risky manual testing or before an eventual import/restore
   feature exists. `export_dir` is injectable, same convention as every
   other data path in the codebase.
+- Writes atomically (temp file + `os.replace`), same convention as
+  `LongMemory`/`Facts`.
 
 ### Logger
 - Timestamps, console output, in-memory log list.
@@ -187,6 +207,10 @@ ASTRA/
   level are filtered out (not printed, stored, or written to file).
 - An invalid `log_level` (e.g. a `config.json` typo) falls back to `INFO`
   instead of crashing on the first log call.
+- A failure writing to the log file (disk full, permission denied, a
+  blocked path) is caught and silently skipped rather than crashing the
+  whole running session — console output and the in-memory `logs` list
+  are unaffected either way.
 - Convenience methods: `debug()`, `info()`, `warning()`, `error()`.
 - Optional file output to `data/astra.log` (path injectable for testing),
   controlled by `config.json`'s `log_level` and `log_to_file` keys.
@@ -233,11 +257,12 @@ ASTRA/
   discover them as regular packages.
 
 ### Tests
-- pytest suite (130 tests) in `tests/`, configured by `pytest.ini`.
+- pytest suite (148 tests) in `tests/`, configured by `pytest.ini`.
 - Covers lifecycle transitions, commands, facts, notes, memory search/
   forget/stats, export, modules, session summary, startup briefing,
-  memory persistence (including corrupt-file fallback), and config
-  loading (including malformed-JSON fallback).
+  memory persistence (including corrupt-file fallback and entries
+  missing keys), and config loading (including malformed-JSON and
+  wrong-shape-JSON fallback).
 - Run with: `python -m pytest`
 
 ### Continuous Integration

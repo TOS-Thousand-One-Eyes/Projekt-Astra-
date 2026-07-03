@@ -741,3 +741,97 @@ above) before it shipped.
 
 ---
 
+# v0.0.12 - 03.07.2026
+
+## Added
+
+### A preference fact that actually changes behavior
+
+**Why:** `docs/suggestions.md` #1 — proves "preferences change behavior"
+generalizes beyond `GreetingCommand`'s `name` usage, before investing in
+anything dedicated for roadmap v0.1.1. The existing `Facts` key-value
+store (`my <thing> is <value>`) already covers teaching the preference;
+this needed exactly one more consumer.
+
+- Teaching `my response length is short` now shortens `MemoryCommand`'s
+  `recall`/`history` triggers from the hardcoded last-5 to the last 2
+  (`_entry_limit()`); any other value, or no preference at all, keeps
+  the default of 5. `search` stays intentionally uncapped, unaffected.
+- 5 new tests in `tests/test_brain.py::TestPreferences`.
+
+## Fixed
+
+### A second review-pass batch of real bugs (4-agent full re-audit)
+
+**Why:** After the preference feature landed, a fresh 4-agent pass (1
+verifier for the new feature, 3 covering the whole codebase again —
+core/config/utils, memory, commands/modules) found several more real,
+verified bugs, including one that silently broke the brand-new
+preference feature itself.
+
+- **`Brain`'s "messages exchanged" session-summary count was
+  unreliable**: it was inferred from short-memory length, but
+  `remember <note>` writes an extra memory entry beyond the normal
+  message/response pair (inflating the count) and `forget <text>`
+  removes entries from short memory too (deflating it). `Brain` now
+  tracks the count itself, directly, in `receive()` — decoupled from
+  `MemoryManager`'s internal bookkeeping entirely.
+- **`FactCommand`'s regexes only stripped a single trailing punctuation
+  character** (`[.!]?`/`\??`), unlike the shared `normalize()` (which
+  strips a whole run). `my mood is great!!` silently learned `"great!"`
+  instead of `"great"` — and `my response length is short..` (one extra
+  trailing dot) silently broke the brand-new preference feature above,
+  since `"short."` != `"short"`. Now uses `[.!?]*$`, matching
+  `normalize()`'s behavior.
+- **`LongMemory.search()`/`forget()` and `MemoryCommand`'s
+  `_stats_summary()`/`_format_entries()` assumed every entry has
+  `"entry"`/`"timestamp"` keys**, the same class of bug already fixed
+  for `"type"` in an earlier release — a hand-edited or oddly-shaped
+  `long_memory.json` entry could crash `recall`/`search`/`history`/
+  `memory stats`. All now use `.get(...)` with fallbacks.
+- **`Config._load()` crashed on syntactically-valid JSON that isn't an
+  object** (e.g. `config.json` containing just `null` or `42`) — the
+  existing malformed-JSON guard only caught actual parse errors. Now
+  falls back to defaults for any non-dict result too.
+- **`Logger`'s file-write path had no error handling** — a disk-full,
+  permission, or blocked-path failure while `log_to_file=True` crashed
+  the entire running session on the very next log call, the same class
+  of unguarded-I/O bug already fixed elsewhere this session. Now caught
+  and silently skipped; console output and the in-memory log are
+  unaffected.
+- **`MemoryCommand._entry_limit()` assumed the `response length` fact
+  value is always a string** — a hand-edited `facts.json` with a
+  non-string value crashed `recall`/`history`. Now guarded with
+  `isinstance(preference, str)`.
+- **`ExportCommand` wrote its export file non-atomically**, unlike
+  `LongMemory`/`Facts` (fixed earlier this session) — a crash mid-write
+  could leave a truncated backup file. Now uses the same temp-file +
+  `os.replace` pattern.
+- **`Brain.__init__`'s `commands or build_default_registry(...)`**
+  would silently discard an explicitly-passed falsy `commands` value
+  and build the default registry instead. Changed to an explicit
+  `is not None` check. (Currently latent — no caller passes a falsy
+  value — but a real correctness gap in the constructor's contract.)
+- 8 new regression tests across `test_brain.py`, `test_config.py`,
+  `test_logger.py`, `test_memory.py`, and `test_export_command.py`.
+
+## Changed
+
+- Bumped version to `0.0.12` in `pyproject.toml` and `config.json`.
+- Marked `docs/suggestions.md` #1 (preference fact) done; remaining
+  open items renumbered.
+
+## Notes
+
+Run the tests with: `python -m pytest` (148 tests)
+
+Same process as v0.0.11: implement, then re-audit with fresh parallel
+agents rather than trusting the implementation pass alone. This time
+the audit ran twice — once against the new feature specifically, once
+against the whole codebase — and both passes found real, previously
+unnoticed bugs, including one (`FactCommand`'s punctuation stripping)
+that silently undermined the very feature just added in this same
+version.
+
+---
+

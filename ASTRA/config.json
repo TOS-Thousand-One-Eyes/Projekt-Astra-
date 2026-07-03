@@ -1,6 +1,6 @@
 {
   "name": "Astra",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "log_level": "INFO",
   "log_to_file": false,
   "check_for_updates": true

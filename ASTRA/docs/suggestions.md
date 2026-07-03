@@ -12,19 +12,7 @@ Done items are kept at the bottom for history.
 
 ---
 
-## 1. A preference fact that actually changes behavior (preview of roadmap v0.1.1)
-
-v0.1.1 wants persistent communication-style/language/priority preferences.
-The existing `Facts` system (`my <thing> is <value>`) is already a
-general-purpose key-value store — it doesn't need a new subsystem, it
-needs one more consumer. `GreetingCommand` already proved the pattern
-(reads the `name` fact, changes its response). Pick one more: e.g.
-`my response length is short` consulted by `MemoryCommand`'s `history`/
-`recall` (currently a hardcoded last-5) to actually shorten output. Small,
-reuses what exists, and proves "preferences change behavior" generalizes
-beyond the one greeting case before investing in anything dedicated.
-
-## 2. Local LLM as a fallback brain
+## 1. Local LLM as a fallback brain
 
 Per the "Offline First" principle: instead of `I heard: ...` for unmatched
 input, a `LanguageModule` should pass the message to a local Ollama model.
@@ -100,11 +88,11 @@ only, same as `UpdateChecker`.
 This is a design only, not yet implemented — no `LanguageModule`,
 `OllamaClient`, or registry wiring code exists yet.
 
-## 3. TFT coaching via screen access (correctly placed: far out, two dependencies)
+## 2. TFT coaching via screen access (correctly placed: far out, two dependencies)
 
 Erik's real near-term want, raised this session: Astra watching the screen
 during a TFT match and coaching live. Honest scope check before this goes
-anywhere: it needs **both** a working local LLM (#2 above) **and** Vision
+anywhere: it needs **both** a working local LLM (#1 above) **and** Vision
 (roadmap v0.2.2 — "OCR, screenshots, basic 'what's on screen'"), neither of
 which exists yet. It's also not really an LLM-reasoning problem underneath
 — TFT patches every ~2 weeks and rotates trait/item sets every ~4 months,
@@ -115,7 +103,7 @@ Correctly sequenced this stays a v0.2.2+ idea, not something to reach for
 early — flagging it here so it's on record and roadmap-placed rather than
 forgotten, not because it's next.
 
-## 4. Deduplicate the `StubModule` test double
+## 3. Deduplicate the `StubModule` test double
 
 `tests/test_modules.py` and `tests/test_brain.py::TestModulesLifecycle`
 each define an identical local `StubModule(Module)` (`name`/`started`/
@@ -128,6 +116,12 @@ behavior change, five-minute fix whenever someone's next in that file.
 
 ## Done
 
+- ~~**A preference fact that actually changes behavior**~~ — Done in
+  v0.0.12: teaching `my response length is short` now shortens
+  `MemoryCommand`'s `recall`/`history` triggers from the last-5 default
+  to the last 2 (`_entry_limit()`); proves the `GreetingCommand`-style
+  "facts change behavior" pattern generalizes; covered by
+  `tests/test_brain.py::TestPreferences`.
 - ~~**Memory visibility**~~ — Done in v0.0.11: `memory stats` chat
   trigger reports total/note/chat entry counts and oldest/newest
   timestamps, reusing `LongMemory.recall()`; covered by
