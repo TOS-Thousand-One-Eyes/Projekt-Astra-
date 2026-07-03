@@ -1,5 +1,6 @@
 from memory.facts import Facts
 from memory.long_memory import LongMemory
+from memory.memory_manager import MemoryManager
 from memory.short_memory import ShortMemory
 
 
@@ -32,6 +33,19 @@ def test_long_memory_falls_back_to_empty_on_corrupt_file(tmp_path):
     path.write_text("{not valid json", encoding="utf-8")
     memory = LongMemory(path)
     assert memory.recall() == []
+
+
+def test_long_memory_corrupt_file_sets_a_load_warning(tmp_path):
+    path = tmp_path / "long_memory.json"
+    path.write_text("{not valid json", encoding="utf-8")
+    memory = LongMemory(path)
+    assert memory.load_warning is not None
+    assert "long_memory.json" in memory.load_warning
+
+
+def test_long_memory_missing_file_sets_no_load_warning(tmp_path):
+    memory = LongMemory(tmp_path / "missing.json")
+    assert memory.load_warning is None
 
 
 def test_long_memory_save_uses_temp_file_then_replaces_target(tmp_path):
@@ -148,10 +162,29 @@ def test_facts_falls_back_to_empty_on_corrupt_file(tmp_path):
     assert facts.all() == {}
 
 
+def test_facts_corrupt_file_sets_a_load_warning(tmp_path):
+    path = tmp_path / "facts.json"
+    path.write_text("{not valid json", encoding="utf-8")
+    facts = Facts(path)
+    assert facts.load_warning is not None
+    assert "facts.json" in facts.load_warning
+
+
 def test_memory_manager_routes_to_both_memories(memory):
     memory.remember("a message")
     assert memory.recall() == ["a message"]
     assert memory.recall_long()[0]["entry"] == "a message"
+
+
+def test_memory_manager_load_warnings_empty_when_clean(memory):
+    assert memory.load_warnings() == []
+
+
+def test_memory_manager_aggregates_load_warnings_from_both_stores(tmp_path):
+    (tmp_path / "long_memory.json").write_text("{not valid json", encoding="utf-8")
+    (tmp_path / "facts.json").write_text("{not valid json", encoding="utf-8")
+    manager = MemoryManager(data_dir=tmp_path)
+    assert len(manager.load_warnings()) == 2
 
 
 def test_memory_manager_facts(memory):

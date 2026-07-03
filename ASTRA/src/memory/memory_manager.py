@@ -41,3 +41,6 @@ class MemoryManager:
 
     def all_facts(self):
         return self.facts.all()
+
+    def load_warnings(self):
+        return [warning for warning in (self.long_memory.load_warning, self.facts.load_warning) if warning]

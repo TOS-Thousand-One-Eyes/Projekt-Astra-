@@ -121,3 +121,29 @@ def test_file_write_failure_does_not_crash_the_logger(tmp_path):
     logger.log("hello")
 
     assert any("hello" in entry for entry in logger.get_logs())
+
+
+def test_file_write_failure_is_logged_loudly_not_silently(tmp_path):
+    blocker = tmp_path / "blocker"
+    blocker.write_text("not a directory", encoding="utf-8")
+    log_path = blocker / "astra.log"
+    logger = Logger(log_to_file=True, log_path=log_path)
+
+    logger.log("hello")
+
+    assert any("WARNING" in entry and "Logging to file failed" in entry for entry in logger.get_logs())
+
+
+def test_file_write_failure_disables_further_file_write_attempts(tmp_path):
+    blocker = tmp_path / "blocker"
+    blocker.write_text("not a directory", encoding="utf-8")
+    log_path = blocker / "astra.log"
+    logger = Logger(log_to_file=True, log_path=log_path)
+
+    logger.log("first")
+    assert logger.log_to_file is False
+
+    warning_count_before = len(logger.get_logs())
+    logger.log("second")
+    warning_count_after = len(logger.get_logs())
+    assert warning_count_after == warning_count_before + 1

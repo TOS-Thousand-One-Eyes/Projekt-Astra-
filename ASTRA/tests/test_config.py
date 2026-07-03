@@ -14,6 +14,7 @@ def test_loads_values_from_file(tmp_path):
     config = Config(path=path)
     assert config.name == "TestBot"
     assert config.version == "9.9.9"
+    assert config.load_warnings == []
 
 
 def test_partial_file_keeps_defaults(tmp_path):
@@ -77,9 +78,37 @@ def test_malformed_json_falls_back_to_defaults(tmp_path):
     assert config.version == UNKNOWN_VERSION
 
 
+def test_malformed_json_produces_a_load_warning(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text("{not valid json", encoding="utf-8")
+    config = Config(path=path)
+    assert any("not valid JSON" in warning for warning in config.load_warnings)
+
+
 def test_valid_json_that_is_not_an_object_falls_back_to_defaults(tmp_path):
     path = tmp_path / "config.json"
     path.write_text("null", encoding="utf-8")
     config = Config(path=path)
     assert config.name == DEFAULTS["name"]
     assert config.version == UNKNOWN_VERSION
+
+
+def test_valid_json_that_is_not_an_object_produces_a_load_warning(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text("null", encoding="utf-8")
+    config = Config(path=path)
+    assert any("does not contain a JSON object" in warning for warning in config.load_warnings)
+
+
+def test_missing_version_produces_a_load_warning(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"name": "TestBot"}), encoding="utf-8")
+    config = Config(path=path)
+    assert any("version" in warning for warning in config.load_warnings)
+
+
+def test_present_version_produces_no_load_warning(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"name": "TestBot", "version": "1.2.3"}), encoding="utf-8")
+    config = Config(path=path)
+    assert config.load_warnings == []

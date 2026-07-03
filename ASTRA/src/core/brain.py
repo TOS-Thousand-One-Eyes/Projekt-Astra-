@@ -43,10 +43,14 @@ class Brain:
 
         self.logger.log(f"{self.config.name} v{self.config.version} is starting...")
         self.logger.log(f"Config loaded from {self.config.path.name}.")
+        for warning in self.config.load_warnings:
+            self.logger.warning(warning)
         self.logger.log(
             f"Memory loaded: {len(long_entries)} entries, "
             f"{self._facts_at_start} facts."
         )
+        for warning in self.memory.load_warnings():
+            self.logger.warning(warning)
         self.logger.log(f"Current time: {self._session_started_at.strftime('%Y-%m-%d %H:%M:%S')}.")
         self._log_last_seen(long_entries)
         self.modules.start_all()

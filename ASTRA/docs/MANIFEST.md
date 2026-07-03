@@ -95,3 +95,33 @@ much larger scoped feature). It exists so that when the local-LLM/
 internet features already planned in `docs/suggestions.md` arrive,
 there's a designed convention to build against instead of retrofitting
 one under time pressure.
+
+# OBSERVABLE FALLBACKS
+
+Falling back to a safe default instead of crashing is good. Falling
+back *silently* is not — it's a different bug wearing a disguise.
+Erik caught this directly: a real run showed `Astra v0.0.0-unknown is
+starting...` with nothing else explaining why, because an earlier
+fallback fix only made things not-crash, not made things visible.
+
+- Every catch-and-recover path must be observable, not just survivable.
+  If a fallback triggers (a corrupt file, missing config, a write that
+  failed), log it — at `WARNING` or higher, because it means something
+  the user can actually go fix (a bad `config.json`, a corrupted memory
+  file, a filesystem problem) is happening right now, not a routine
+  status update.
+- If the object hitting the problem doesn't have a `logger` yet (e.g.
+  `Config`, constructed in `main.py` before `Logger` exists), don't skip
+  the warning — record it on the object itself (e.g. `self.load_warnings`
+  on `Config`, `self.load_warning` on `LongMemory`/`Facts`) so the next
+  thing downstream that *does* have a logger surfaces it. `Brain.start()`
+  is that place today: it already logs "Config loaded from..." and
+  "Memory loaded: N entries..." — any warnings ride right alongside.
+- "It didn't crash" is not the same as "it's fine." A safe default that
+  quietly masks a real problem (a version that silently becomes
+  "unknown", a memory file that silently resets to empty, a log file
+  that silently stops being written) is worse than a loud failure,
+  because nobody notices until much later, if ever.
+- When fixing a bug, verify the fix is *actually visible* when it
+  triggers — a test that only checks "didn't raise" isn't enough; check
+  that a warning was actually logged, at a level a user would see.

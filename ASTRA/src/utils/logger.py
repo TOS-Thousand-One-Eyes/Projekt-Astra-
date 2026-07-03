@@ -25,8 +25,11 @@ class Logger:
                 self.log_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(self.log_path, "a", encoding="utf-8") as f:
                     f.write(entry + "\n")
-            except OSError:
-                pass
+            except OSError as error:
+                self.log_to_file = False
+                failure_entry = f"[{timestamp}] WARNING Logging to file failed ({error}); file logging disabled for this session."
+                self.logs.append(failure_entry)
+                print(failure_entry)
 
     def debug(self, message):
         self.log(message, "DEBUG")

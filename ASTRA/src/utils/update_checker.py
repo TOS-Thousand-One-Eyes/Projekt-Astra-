@@ -23,7 +23,11 @@ class UpdateChecker:
         try:
             current_parsed = self._parse(self.current_version)
         except Exception:
-            self.logger.info("Skipping update check: local version is unknown.")
+            self.logger.warning(
+                "Local version is unknown (check config.json's \"version\" key); "
+                "skipping the up-to-date comparison."
+            )
+            self._report_latest_without_comparison()
             return
 
         try:
@@ -39,6 +43,14 @@ class UpdateChecker:
             )
         else:
             self.logger.info("Astra is up to date.")
+
+    def _report_latest_without_comparison(self):
+        try:
+            latest = self.fetch()
+        except Exception as error:
+            self.logger.debug(f"Update check failed: {error}")
+            return
+        self.logger.info(f"Latest available version: v{latest}. Download it at {self.repo_url}")
 
     @staticmethod
     def _parse(version):

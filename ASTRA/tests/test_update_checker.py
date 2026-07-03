@@ -74,18 +74,29 @@ def test_wrong_type_fetch_result_is_logged_at_debug_not_swallowed():
     assert any("Update check failed" in entry for entry in logger.get_logs())
 
 
-def test_unknown_local_version_is_logged_at_info_not_swallowed():
+def test_unknown_local_version_logs_a_warning_not_swallowed():
     logger = Logger()
     checker = UpdateChecker("0.0.0-unknown", logger, fetch=lambda: "9.9.9")
     checker.check()
     logs = logger.get_logs()
-    assert any("Skipping update check" in entry for entry in logs)
+    assert any("WARNING" in entry and "version is unknown" in entry for entry in logs)
 
 
-def test_unknown_local_version_never_calls_fetch():
-    def fetch():
-        raise AssertionError("fetch should not be called when local version is unknown")
-
+def test_unknown_local_version_still_reports_the_latest_available_version():
     logger = Logger()
-    checker = UpdateChecker("0.0.0-unknown", logger, fetch=fetch)
+    checker = UpdateChecker("0.0.0-unknown", logger, fetch=lambda: "9.9.9")
     checker.check()
+    logs = logger.get_logs()
+    assert any("Latest available version: v9.9.9" in entry and checker.repo_url in entry for entry in logs)
+    assert not any("up to date" in entry for entry in logs)
+
+
+def test_unknown_local_version_with_failing_fetch_is_logged_at_debug():
+    def failing_fetch():
+        raise OSError("no internet")
+
+    logger = Logger(level="DEBUG")
+    checker = UpdateChecker("0.0.0-unknown", logger, fetch=failing_fetch)
+    checker.check()
+    logs = logger.get_logs()
+    assert any("Update check failed" in entry for entry in logs)

@@ -2,6 +2,7 @@ import pytest
 
 from commands.registry import CommandRegistry
 from core.brain import Brain
+from memory.memory_manager import MemoryManager
 from modules.module import Module
 from modules.modules import Modules
 from utils.logger import Logger
@@ -438,3 +439,18 @@ class TestStartupBriefing:
         brain.start()
         logs = brain.logger.get_logs()
         assert any("Last seen" in entry and "ago" in entry for entry in logs)
+
+    def test_config_load_warning_is_surfaced_at_startup(self, config, memory):
+        config.load_warnings.append("test warning: something is misconfigured")
+        brain = Brain(Logger(), config, memory, Modules(Logger()))
+        brain.start()
+        logs = brain.logger.get_logs()
+        assert any("WARNING" in entry and "test warning" in entry for entry in logs)
+
+    def test_memory_load_warning_is_surfaced_at_startup(self, config, tmp_path):
+        (tmp_path / "long_memory.json").write_text("{not valid json", encoding="utf-8")
+        memory = MemoryManager(data_dir=tmp_path)
+        brain = Brain(Logger(), config, memory, Modules(Logger()))
+        brain.start()
+        logs = brain.logger.get_logs()
+        assert any("WARNING" in entry and "long_memory.json" in entry for entry in logs)

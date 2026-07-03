@@ -11,6 +11,7 @@ class Facts:
     def __init__(self, path=DATA_FILE):
         self.path = Path(path)
         self.facts = {}
+        self.load_warning = None
         self.load()
 
     def learn(self, key, value):
@@ -37,5 +38,6 @@ class Facts:
         try:
             with open(self.path, "r", encoding="utf-8") as f:
                 self.facts = json.load(f)
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError) as error:
             self.facts = {}
+            self.load_warning = f"{self.path.name} could not be loaded ({error}); starting with empty facts."
