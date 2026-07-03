@@ -41,83 +41,7 @@ by manually corrupting `facts.json`. Worth deciding deliberately (give
 `Command` a logger now, generalizing the pattern) rather than
 one-off-ing a workaround, next time this file is touched.
 
-## 3. Local LLM as a fallback brain
-
-Per the "Offline First" principle: instead of `I heard: ...` for unmatched
-input, a `LanguageModule` should pass the message to a local Ollama model.
-Rule-based commands stay instant and free; only unmatched input goes to the
-model — this is the bridge from "chatbot with if-statements" to "actual AI
-assistant." The `Modules` hardening this depended on already landed (error
-handling + required `logger`, see Done below), so a flaky/unreachable Ollama
-server can no longer brick the Brain.
-
-**Recommended model — recalibrated against Erik's actual hardware** (Intel
-i5-10310U, 4 cores/8 threads @ 2.21GHz, integrated Intel UHD graphics with
-no dedicated VRAM, 16GB RAM — confirmed models needing up to ~8-10GB RAM
-are a fine normal target, not just the lightest option): `qwen3:4b` or
-`qwen3:8b` (~2.5-5.2GB disk, ~5-9GB RAM) as the real default — the earlier
-`llama3.2:1b` recommendation was written before hardware specs were known
-and undersells what this machine can actually run. `deepseek-r1:8b` is a
-reasoning-focused alternative in the same weight class (note: its distilled
-models emit `<think>...</think>` reasoning traces in the response by
-default — the response parser needs to handle/strip that, unlike plain
-Qwen3/Llama-family models). Keep `llama3.2:1b`/`qwen2.5:0.5b` in mind as
-the "still works even when the machine is busy with other things" fallback
-— **CPU-only inference speed (no GPU) is the more relevant constraint here
-than RAM headroom**: a bigger model will simply respond slower, not fail to
-fit.
-
-Qwen3 and DeepSeek-R1 (local) need **zero new client code** — they're just
-different `model` string values on the same `OllamaClient` described below,
-not separate integrations.
-
-**Recommended endpoint:** Ollama's local server (`http://localhost:11434`)
-exposes `POST /api/generate` (single-turn: `{"model": ..., "prompt": ...,
-"stream": false}` in, generated text in the `response` field out) and
-`POST /api/chat` (message history: `{"model": ..., "messages": [{"role":
-"user", "content": ...}], "stream": false}` in, text in `message.content`
-out). First cut should use `/api/generate` — the codebase has no
-conversation-history concept threaded into a fallback yet, so `/api/chat`'s
-`messages` list would always be exactly one message, a needless complication.
-`/api/chat` is the natural v2 once `ShortMemory`'s session log can be
-passed through as real chat history.
-
-**Class shape:** an `OllamaClient` utility mirroring `UpdateChecker`'s
-constructor-injection style (`base_url`, `model`, a short 2-3s timeout for
-a `GET /api/tags` liveness+model-availability pre-flight, a longer 30-120s
-timeout for the actual generate call, since a cold model can take several
-seconds to load into RAM on its first call — reusing `UpdateChecker`'s 3s
-default would misfire constantly on generation). `urllib.error.URLError`
-means the server itself isn't reachable (connection refused); `urllib.
-error.HTTPError` with a 404 and a `{"error": "model '...' not found, try
-pulling it first"}` body means the server is up but the model isn't pulled
-— both are real, expected failure modes, not edge cases.
-
-`LanguageModule(Module)` wraps `OllamaClient` and implements `start()` as
-the `/api/tags` pre-flight — on failure it simply raises a clear error
-(e.g. `ConnectionError("Ollama not reachable")`), letting `Modules.
-start_all()`'s now-hardened try/except catch it, log `"Module 'language'
-failed to start: ..."`, and move on — no crash, no special-cased logger
-dependency needed inside `LanguageModule` itself. The module tracks its
-own `available` flag so callers know whether to bother consulting it.
-
-**Integration point:** `CommandRegistry.dispatch()` (`src/commands/
-registry.py`) currently always falls back to `return DispatchResult(f"I
-heard: {message}")` when no command matches. This needs a way to consult
-the `LanguageModule` first when it's available — e.g. `CommandRegistry`
-gains an optional `language_module` param, consulted only when no command
-matched *and* the module reports itself available, falling through to the
-existing `I heard: ...` string otherwise, so an unreachable Ollama server
-degrades to today's exact baseline behavior, not a broken one.
-
-Reminder per the permanent development rules: no LangChain, no LangGraph,
-no `ollama` pip package — stdlib `urllib.request`/`urllib.error`/`json`
-only, same as `UpdateChecker`.
-
-This is a design only, not yet implemented — no `LanguageModule`,
-`OllamaClient`, or registry wiring code exists yet.
-
-## 4. TFT coaching via screen access (correctly placed: far out, two dependencies)
+## 3. TFT coaching via screen access (correctly placed: far out, two dependencies)
 
 Erik's real near-term want, raised this session: Astra watching the screen
 during a TFT match and coaching live. Honest scope check before this goes
@@ -132,25 +56,30 @@ Correctly sequenced this stays a v0.2.2+ idea, not something to reach for
 early — flagging it here so it's on record and roadmap-placed rather than
 forgotten, not because it's next.
 
-## 5. Deduplicate the `StubModule` test double
-
-`tests/test_modules.py` and `tests/test_brain.py::TestModulesLifecycle`
-each define an identical local `StubModule(Module)` (`name`/`started`/
-`stopped` tracking) instead of sharing one from `tests/conftest.py`,
-where `memory`/`config`/`brain`/`running_brain` are already centralized.
-Flagged in a review pass, never actually fixed. Pure test hygiene, zero
-behavior change, five-minute fix whenever someone's next in that file.
-
 ---
 
 ## Done
 
+- ~~**Local LLM as a fallback brain**~~ — Done in v0.0.15 (merged in from
+  a parallel `copilot/analyze-project-changes` branch, PR #6, rather than
+  built fresh this session): added `OllamaClient`, `LanguageModule`,
+  config gating (`use_language_fallback`, `language_base_url`,
+  `language_model`), and `CommandRegistry` fallback wiring for unmatched
+  messages; covered by `tests/test_ollama_client.py`,
+  `tests/test_modules.py`, and `tests/test_brain.py`.
+- ~~**Deduplicate the `StubModule` test double**~~ — Done in v0.0.15
+  (same merged branch): moved the shared `StubModule` into
+  `tests/conftest.py`, removing the duplicate definitions from
+  `tests/test_modules.py` and `tests/test_brain.py`.
 - ~~**A preference fact that actually changes behavior**~~ — Done in
   v0.0.12: teaching `my response length is short` now shortens
   `MemoryCommand`'s `recall`/`history` triggers from the last-5 default
   to the last 2 (`_entry_limit()`); proves the `GreetingCommand`-style
   "facts change behavior" pattern generalizes; covered by
-  `tests/test_brain.py::TestPreferences`.
+  `tests/test_brain.py::TestPreferences`. (The merged-in v0.0.15 branch
+  had independently built the same behavior with a last-3 cutoff under
+  different constant names — dropped in favor of this already-shipped
+  version rather than keeping two competing implementations.)
 - ~~**Memory visibility**~~ — Done in v0.0.11: `memory stats` chat
   trigger reports total/note/chat entry counts and oldest/newest
   timestamps, reusing `LongMemory.recall()`; covered by

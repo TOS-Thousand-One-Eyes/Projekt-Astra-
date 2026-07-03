@@ -1,26 +1,13 @@
 import pytest
 
 from commands.registry import CommandRegistry
+from conftest import StubModule
 from core.brain import Brain
 from memory.memory_manager import MemoryManager
+from modules.language_module import LanguageModule
 from modules.module import Module
 from modules.modules import Modules
 from utils.logger import Logger
-
-
-class StubModule(Module):
-
-    name = "stub"
-
-    def __init__(self):
-        self.started = False
-        self.stopped = False
-
-    def start(self):
-        self.started = True
-
-    def stop(self):
-        self.stopped = True
 
 
 class FailingModule(Module):
@@ -156,6 +143,36 @@ class TestCommands:
 
     def test_unknown_message_is_echoed(self, running_brain):
         assert running_brain.receive("something random") == "I heard: something random"
+
+    def test_unknown_message_uses_language_module_when_available(self, config, memory):
+        class StubClient:
+            def ensure_available(self):
+                return None
+
+            def generate(self, prompt):
+                return f"Local reply: {prompt}"
+
+        modules = Modules(Logger())
+        modules.add_module(LanguageModule(StubClient()))
+        brain = Brain(Logger(), config, memory, modules)
+        brain.start()
+
+        assert brain.receive("something random") == "Local reply: something random"
+
+    def test_unknown_message_falls_back_to_echo_when_language_module_runtime_fails(self, config, memory):
+        class StubClient:
+            def ensure_available(self):
+                return None
+
+            def generate(self, prompt):
+                raise OSError("connection dropped")
+
+        modules = Modules(Logger())
+        modules.add_module(LanguageModule(StubClient()))
+        brain = Brain(Logger(), config, memory, modules)
+        brain.start()
+
+        assert brain.receive("something random") == "I heard: something random"
 
     def test_stray_shell_command_is_not_echoed(self, running_brain):
         response = running_brain.receive(r"C:\Python\python.exe c:/Development/ASTRA/src/main.py")
@@ -296,7 +313,6 @@ class TestNotes:
         running_brain.receive("remember buy milk")
         response = running_brain.receive("history")
         assert "remember buy milk" in response
-
 
 class TestMemoryStats:
 

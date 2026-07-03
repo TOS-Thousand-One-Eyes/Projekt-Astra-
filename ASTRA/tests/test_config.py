@@ -70,6 +70,31 @@ def test_loads_check_for_updates_from_file(tmp_path):
     assert config.check_for_updates is False
 
 
+def test_language_fallback_defaults(tmp_path):
+    config = Config(path=tmp_path / "missing.json")
+    assert config.use_language_fallback == DEFAULTS["use_language_fallback"]
+    assert config.language_base_url == DEFAULTS["language_base_url"]
+    assert config.language_model == DEFAULTS["language_model"]
+
+
+def test_loads_language_fallback_settings_from_file(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "use_language_fallback": True,
+                "language_base_url": "http://127.0.0.1:11434",
+                "language_model": "qwen3:8b",
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = Config(path=path)
+    assert config.use_language_fallback is True
+    assert config.language_base_url == "http://127.0.0.1:11434"
+    assert config.language_model == "qwen3:8b"
+
+
 def test_malformed_json_falls_back_to_defaults(tmp_path):
     path = tmp_path / "config.json"
     path.write_text("{not valid json", encoding="utf-8")

@@ -70,12 +70,6 @@ class MemoryCommand(Command):
             return "I don't remember anything yet."
         return self._format_entries(entries[-self._entry_limit():], "Here's everything recently, notes and chat:")
 
-    def _entry_limit(self):
-        preference = self.memory.get_fact("response length")
-        if isinstance(preference, str) and preference.lower() == "short":
-            return self.SHORT_LIMIT
-        return self.DEFAULT_LIMIT
-
     def _stats_summary(self):
         entries = self.memory.recall_long()
         if not entries:
@@ -96,3 +90,9 @@ class MemoryCommand(Command):
     def _format_entries(self, entries, header):
         lines = [f"- [{item.get('timestamp', 'unknown')}] {item.get('entry', '')}" for item in entries]
         return header + "\n" + "\n".join(lines)
+
+    def _entry_limit(self):
+        preference = self.memory.get_fact("response length")
+        if isinstance(preference, str) and preference.strip().lower() == "short":
+            return self.SHORT_LIMIT
+        return self.DEFAULT_LIMIT

@@ -940,3 +940,64 @@ Run the tests with: `python -m pytest` (162 tests)
 
 ---
 
+# v0.0.15 - 03.07.2026
+
+## Added
+
+### Local Ollama fallback for unmatched chat, merged from a parallel branch
+
+**Why:** While this session's bug-fix rounds were in progress, a separate
+`copilot/analyze-project-changes` branch was merged directly into GitHub's
+`main` (PR #6) — independently, with no coordination with this session. It
+implemented `docs/suggestions.md`'s "Local LLM" item for real, so Erik had
+it merged in rather than discarded.
+
+- Added `src/utils/ollama_client.py`: stdlib-only Ollama client
+  (`urllib.request` + `json`), with a `GET /api/tags` preflight and
+  `POST /api/generate` inference call
+- Added `src/modules/language_module.py`: `LanguageModule(Module)` wraps
+  `OllamaClient`, tracks `available`, raises a clear startup error when
+  Ollama is unreachable, and disables itself if generation later fails
+- `CommandRegistry` now accepts an optional `language_module` and consults
+  it only after normal command matching and the stray-shell-command guard,
+  falling back to the existing echo when the module is absent, unavailable,
+  or returns nothing
+- `Brain` auto-wires the first module named `language` into the default
+  registry, keeping the coupling one-way (`Brain` still does not know
+  command trigger words)
+- `main.py` gates the feature behind new `config.json` settings:
+  `use_language_fallback` (default `false`, per the permission convention),
+  `language_base_url`, and `language_model`
+- `<think>...</think>` blocks are stripped from local-model output before
+  it's shown, so reasoning-trace models like DeepSeek-R1 degrade cleanly
+- New tests in `tests/test_ollama_client.py` plus additions to
+  `tests/test_modules.py` and `tests/test_brain.py`
+
+### Test hygiene merged from the same branch
+
+- Deduplicated the shared `StubModule` test double into `tests/conftest.py`
+  (closes `docs/suggestions.md`'s dedupe item), removing the duplicate
+  definitions from `tests/test_modules.py` and `tests/test_brain.py`
+
+## Changed
+
+- The same parallel branch had independently re-implemented this session's
+  v0.0.12 "response length" preference feature under different constant
+  names (`SHORT_ENTRY_LIMIT = 3` vs. this branch's `SHORT_LIMIT = 2`),
+  including its own duplicate tests. Per Erik's explicit instruction, this
+  session's already-shipped implementation and tests were kept as-is and
+  the incoming duplicate was dropped — same feature, one implementation.
+- Bumped version to `0.0.15` in `pyproject.toml` and `config.json`.
+
+## Notes
+
+Run the tests with: `python -m pytest` (173 tests)
+
+Merge process: created a `backup/pre-merge-2026-07-03` branch pointing at
+pre-merge local `main` before touching anything, then resolved each
+conflict by hand (not a blanket `-X ours`/`-X theirs`) — genuinely new,
+non-overlapping work (the Ollama fallback, the `StubModule` dedup) was
+kept from the incoming branch; the one real feature collision (response
+length preference) was resolved in favor of this session's existing,
+already-tested implementation. Full suite re-run after resolution, before
+committing the merge.
