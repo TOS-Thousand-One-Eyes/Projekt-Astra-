@@ -13,7 +13,7 @@ class Brain:
 
     TRANSITIONS = {
         OFFLINE: (STARTING,),
-        STARTING: (RUNNING,),
+        STARTING: (RUNNING, OFFLINE),
         RUNNING: (STOPPING,),
         STOPPING: (OFFLINE,),
     }
@@ -41,26 +41,30 @@ class Brain:
 
     def start(self):
         self._set_state(self.STARTING)
-        self._session_started_at = datetime.now()
-        self._facts_at_start = len(self.memory.all_facts())
-        self._message_count = 0
-        long_entries = self.memory.recall_long()
+        try:
+            self._session_started_at = datetime.now()
+            self._facts_at_start = len(self.memory.all_facts())
+            self._message_count = 0
+            long_entries = self.memory.recall_long()
 
-        self.logger.log(f"{self.config.name} v{self.config.version} is starting...")
-        self.logger.log(f"Config loaded from {self.config.path.name}.")
-        for warning in self.config.load_warnings:
-            self.logger.warning(warning)
-        self.logger.log(
-            f"Memory loaded: {len(long_entries)} entries, "
-            f"{self._facts_at_start} facts."
-        )
-        for warning in self.memory.load_warnings():
-            self.logger.warning(warning)
-        self.logger.log(f"Current time: {self._session_started_at.strftime('%Y-%m-%d %H:%M:%S')}.")
-        self._log_last_seen(long_entries)
-        self.modules.start_all()
-        self.logger.log(f"Modules started: {len(self.modules.list_modules())}.")
-        self._set_state(self.RUNNING)
+            self.logger.log(f"{self.config.name} v{self.config.version} is starting...")
+            self.logger.log(f"Config loaded from {self.config.path.name}.")
+            for warning in self.config.load_warnings:
+                self.logger.warning(warning)
+            self.logger.log(
+                f"Memory loaded: {len(long_entries)} entries, "
+                f"{self._facts_at_start} facts."
+            )
+            for warning in self.memory.load_warnings():
+                self.logger.warning(warning)
+            self.logger.log(f"Current time: {self._session_started_at.strftime('%Y-%m-%d %H:%M:%S')}.")
+            self._log_last_seen(long_entries)
+            self.modules.start_all()
+            self.logger.log(f"Modules started: {len(self.modules.list_modules())}.")
+            self._set_state(self.RUNNING)
+        except Exception as error:
+            self._recover_to_offline("Startup", error)
+            raise
         self.logger.log("Brain is ready.")
         name = self.memory.get_fact("name")
         if name:
@@ -73,10 +77,14 @@ class Brain:
 
     def stop(self):
         self._set_state(self.STOPPING)
-        self.logger.log(f"Stopping {self.config.name}...")
-        self.modules.stop_all()
-        self.logger.log(f"Modules stopped: {len(self.modules.list_modules())}.")
-        self._log_session_summary()
+        try:
+            self.logger.log(f"Stopping {self.config.name}...")
+            self.modules.stop_all()
+            self.logger.log(f"Modules stopped: {len(self.modules.list_modules())}.")
+            self._log_session_summary()
+        except Exception as error:
+            self._recover_to_offline("Shutdown", error)
+            raise
         self._set_state(self.OFFLINE)
         self.logger.log(f"{self.config.name} stopped.")
 
@@ -119,6 +127,13 @@ class Brain:
             if getattr(module, "name", None) == "language":
                 return module
         return None
+
+    def _recover_to_offline(self, phase, error):
+        self.logger.error(
+            f"{phase} failed mid-transition ({type(error).__name__}: {error}); "
+            f"returning to {self.OFFLINE} so it can be retried."
+        )
+        self._set_state(self.OFFLINE)
 
     def _set_state(self, new_state):
         allowed = self.TRANSITIONS[self.state]

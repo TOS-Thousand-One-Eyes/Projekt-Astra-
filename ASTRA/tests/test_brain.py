@@ -69,6 +69,76 @@ class TestLifecycle:
         assert brain.commands is empty_registry
 
 
+class TestLifecycleRecovery:
+
+    def test_start_failure_returns_to_offline_and_reraises_the_real_error(self, config, memory):
+        memory.long_memory.entries.append({"timestamp": "not-a-timestamp", "entry": "corrupt"})
+        brain = Brain(Logger(), config, memory, Modules(Logger()))
+
+        with pytest.raises(ValueError, match="not-a-timestamp"):
+            brain.start()
+
+        assert brain.state == Brain.OFFLINE
+
+    def test_start_can_be_retried_after_a_failed_start(self, config, memory):
+        memory.long_memory.entries.append({"timestamp": "not-a-timestamp", "entry": "corrupt"})
+        brain = Brain(Logger(), config, memory, Modules(Logger()))
+
+        with pytest.raises(ValueError):
+            brain.start()
+
+        memory.long_memory.entries.clear()
+        brain.start()
+        assert brain.state == Brain.RUNNING
+
+    def test_retried_start_raises_the_real_error_again_not_invalid_transition(self, config, memory):
+        memory.long_memory.entries.append({"timestamp": "not-a-timestamp", "entry": "corrupt"})
+        brain = Brain(Logger(), config, memory, Modules(Logger()))
+
+        with pytest.raises(ValueError):
+            brain.start()
+        with pytest.raises(ValueError) as excinfo:
+            brain.start()
+
+        assert "Invalid state transition" not in str(excinfo.value)
+
+    def test_start_failure_is_logged_as_an_error(self, config, memory):
+        memory.long_memory.entries.append({"timestamp": "not-a-timestamp", "entry": "corrupt"})
+        brain = Brain(Logger(), config, memory, Modules(Logger()))
+
+        with pytest.raises(ValueError):
+            brain.start()
+
+        logs = brain.logger.get_logs()
+        assert any("ERROR" in entry and "Startup failed" in entry for entry in logs)
+
+    def test_stop_failure_returns_to_offline_and_reraises_the_real_error(self, running_brain):
+        running_brain._session_started_at = "not-a-datetime"
+
+        with pytest.raises(TypeError):
+            running_brain.stop()
+
+        assert running_brain.state == Brain.OFFLINE
+
+    def test_brain_can_be_started_again_after_a_failed_stop(self, running_brain):
+        running_brain._session_started_at = "not-a-datetime"
+
+        with pytest.raises(TypeError):
+            running_brain.stop()
+
+        running_brain.start()
+        assert running_brain.state == Brain.RUNNING
+
+    def test_stop_failure_is_logged_as_an_error(self, running_brain):
+        running_brain._session_started_at = "not-a-datetime"
+
+        with pytest.raises(TypeError):
+            running_brain.stop()
+
+        logs = running_brain.logger.get_logs()
+        assert any("ERROR" in entry and "Shutdown failed" in entry for entry in logs)
+
+
 class TestUpdateCheck:
 
     def test_start_calls_update_checker_when_present(self, config, memory):

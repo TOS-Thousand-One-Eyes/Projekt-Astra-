@@ -24,15 +24,6 @@ deliberately deferred — small individually, but bundling six unrelated
 fixes into one commit would violate the single-capability-commit rule, so
 each needs its own pass next time this area is touched:
 
-- **`Brain` has no recovery path from a mid-transition crash**
-  (`core/brain.py` `TRANSITIONS`/`start()`/`stop()`): if anything inside
-  `start()` raises after `_set_state(STARTING)` but before reaching
-  `RUNNING` (e.g. a corrupted timestamp blowing up
-  `datetime.fromisoformat` in `_log_last_seen`), the state gets stuck at
-  `STARTING` forever — a second `start()` call then raises a confusing
-  `Invalid state transition` error instead of the real one. Needs either a
-  `STARTING`/`STOPPING` → `OFFLINE` escape transition or a try/finally
-  around the body of `start()`/`stop()`.
 - **`Modules.start_all()`/`stop_all()`'s own error handler can crash**
   (`modules/modules.py`): the `except` block does `f"Module
   '{module.name}' failed..."` — if a malformed module lacks `.name` *and*
@@ -132,6 +123,16 @@ forgotten, not because it's next.
 
 ## Done
 
+- ~~**`Brain` stuck-state on a mid-transition crash**~~ — Done (this
+  session, deferred item 0 from the 2026-07-03 audit): `start()`/`stop()`
+  now wrap their bodies in try/except — on any failure between
+  `STARTING`→`RUNNING` or `STOPPING`→`OFFLINE`, the error is logged at
+  `ERROR` (observable, per MANIFEST.md), the state escapes back to
+  `OFFLINE` (new `STARTING → OFFLINE` transition in `TRANSITIONS`), and
+  the original exception re-raises — so a retried `start()` reports the
+  real problem (e.g. a corrupt timestamp) instead of a confusing
+  `Invalid state transition`. Covered by
+  `tests/test_brain.py::TestLifecycleRecovery`.
 - ~~**Automatic failure flagging instead of crashing or silently
   continuing**~~ — Done (this session): `CommandRegistry.dispatch()` now
   wraps message normalization and every `command.handle()` call in
