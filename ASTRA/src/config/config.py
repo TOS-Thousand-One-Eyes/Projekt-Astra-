@@ -21,7 +21,7 @@ class Config:
         settings = dict(DEFAULTS)
         settings.update(self._load())
         self.name = settings["name"]
-        self.version = settings.get("version", UNKNOWN_VERSION)
+        self.version = settings.get("version") or UNKNOWN_VERSION
         self.log_level = settings["log_level"]
         self.log_to_file = settings["log_to_file"]
         self.check_for_updates = settings["check_for_updates"]

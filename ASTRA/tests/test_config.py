@@ -36,6 +36,13 @@ def test_version_falls_back_to_unknown_sentinel_when_no_file(tmp_path):
     assert config.version == UNKNOWN_VERSION
 
 
+def test_version_falls_back_to_unknown_sentinel_when_null_in_file(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"name": "TestBot", "version": None}), encoding="utf-8")
+    config = Config(path=path)
+    assert config.version == UNKNOWN_VERSION
+
+
 def test_log_level_and_log_to_file_defaults(tmp_path):
     config = Config(path=tmp_path / "missing.json")
     assert config.log_level == DEFAULTS["log_level"]

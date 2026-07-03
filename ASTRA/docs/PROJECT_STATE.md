@@ -199,7 +199,7 @@ ASTRA/
   discover them as regular packages.
 
 ### Tests
-- pytest suite (110 tests) in `tests/`, configured by `pytest.ini`.
+- pytest suite (113 tests) in `tests/`, configured by `pytest.ini`.
 - Covers lifecycle transitions, commands, facts, notes, memory search/
   forget, modules, session summary, startup briefing, memory persistence,
   and config loading.

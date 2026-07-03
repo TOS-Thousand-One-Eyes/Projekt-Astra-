@@ -239,6 +239,16 @@ class TestNotes:
         response = running_brain.receive("search bicycle")
         assert "couldn't find" in response
 
+    def test_recall_does_not_crash_on_legacy_entries_without_type(self, running_brain, memory):
+        memory.long_memory.entries.append({"timestamp": "2020-01-01T00:00:00", "entry": "legacy chat"})
+        response = running_brain.receive("recall")
+        assert "don't remember anything" in response
+
+    def test_search_does_not_crash_on_legacy_entries_without_type(self, running_brain, memory):
+        memory.long_memory.entries.append({"timestamp": "2020-01-01T00:00:00", "entry": "legacy chat"})
+        response = running_brain.receive("search legacy")
+        assert "couldn't find" in response
+
     def test_search_notes_only_excludes_chat_echo(self, running_brain):
         running_brain.receive("remember buy milk")
         response = running_brain.receive("search milk")

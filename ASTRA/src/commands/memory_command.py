@@ -46,13 +46,13 @@ class MemoryCommand(Command):
         return message.split(" ", 1)[1].strip()
 
     def _recall_summary(self):
-        notes = [item for item in self.memory.recall_long() if item["type"] == "note"]
+        notes = [item for item in self.memory.recall_long() if item.get("type") == "note"]
         if not notes:
             return "I don't remember anything yet."
         return self._format_entries(notes[-5:], "Here's what I remember recently:")
 
     def _search_summary(self, query):
-        matches = [item for item in self.memory.search_long(query) if item["type"] == "note"]
+        matches = [item for item in self.memory.search_long(query) if item.get("type") == "note"]
         if not matches:
             return f"I couldn't find anything matching: {query}"
         return self._format_entries(matches, "Here's what I found:")

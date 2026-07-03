@@ -574,6 +574,34 @@ real complexity this "do not overengineer" project doesn't need.
   so the cost is almost entirely `setup-python` provisioning time per
   job, and GitHub Actions runs the matrix in parallel
 
+### Bug fixes found in a review pass
+
+**Why:** Before pushing, ran a two-agent review pass over the four
+commits above and found a real, currently-reproducible crash:
+
+- `MemoryCommand._recall_summary()`/`_search_summary()` indexed
+  `item["type"]` directly to filter for notes. The real `data/
+  long_memory.json` on this checkout has 82 entries predating v0.0.9's
+  `type` tagging, none of which have a `"type"` key — `recall` and
+  `search <text>` (whenever the query matched an old entry) crashed
+  with `KeyError: 'type'` uncaught, all the way up through
+  `Brain.receive()`. No test caught this because tests only construct
+  fresh, always-tagged entries in memory, never load real legacy data.
+  Both methods now use `item.get("type")` instead, so an untagged
+  legacy entry is treated as non-note (excluded from `recall`/`search`,
+  but still visible via `history`) instead of crashing.
+- `Config.version` used `settings.get("version", UNKNOWN_VERSION)`,
+  which only falls back when the key is *absent* — an explicit
+  `"version": null` in `config.json` (e.g. a corrupted/partial save)
+  would set `self.version = None` instead of the sentinel. Changed to
+  `settings.get("version") or UNKNOWN_VERSION`, which also catches
+  falsy values.
+- Added regression tests: `tests/test_brain.py::TestNotes` gained
+  `test_recall_does_not_crash_on_legacy_entries_without_type` and
+  `test_search_does_not_crash_on_legacy_entries_without_type`;
+  `tests/test_config.py` gained
+  `test_version_falls_back_to_unknown_sentinel_when_null_in_file`.
+
 ## Changed
 
 - Bumped version to `0.0.10` in `pyproject.toml` and `config.json` —
@@ -586,7 +614,7 @@ real complexity this "do not overengineer" project doesn't need.
 
 ## Notes
 
-Run the tests with: `python -m pytest` (110 tests)
+Run the tests with: `python -m pytest` (113 tests)
 
 This version closes out all four items that were pending in
 `docs/suggestions.md` after v0.0.9: Modules lifecycle error handling,
