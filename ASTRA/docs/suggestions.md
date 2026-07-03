@@ -6,72 +6,106 @@ Done items are kept at the bottom for history.
 
 ---
 
-## 1. Module lifecycle needs error handling before a real module exists
+## 1. Local LLM as a fallback brain
 
-`Modules.start_all()`/`stop_all()` (`src/modules/modules.py`) call each
-module's `start()`/`stop()` with no try/except, and `Brain.start()`/`stop()`
-call them mid-lifecycle, after the state has already moved to `STARTING`/
-`STOPPING`. If a module's `start()` raises, the exception aborts `start()`
-*before* `_set_state(RUNNING)` runs — the Brain is left stuck in `STARTING`
-forever, since the `TRANSITIONS` state machine has no `STARTING -> STARTING`
-retry path and no `STARTING -> STOPPING` escape either. Same problem
-symmetrically in `stop()` (a failing module strands the Brain in `STOPPING`).
-Harmless today only because the real `Modules()` starts empty — but this is
-the exact landmine waiting for suggestion #2 below, since a `LanguageModule`
-talking to Ollama is precisely the kind of subsystem that fails (model not
-pulled, server not running, network hiccup). `UpdateChecker.check()` already
-established the right pattern in this codebase (`ASTRA/src/utils/
-update_checker.py`): wrap the risky call, log the failure via `logger`, never
-let it propagate and take down the Brain. `Modules` needs the same treatment
-— likely means giving `Modules` a `logger` (injected the same way
-`UpdateChecker` is), so a broken module degrades to "logged and skipped"
-instead of bricking the assistant.
+Per the "Offline First" principle: instead of `I heard: ...` for unmatched
+input, a `LanguageModule` should pass the message to a local Ollama model.
+Rule-based commands stay instant and free; only unmatched input goes to the
+model — this is the bridge from "chatbot with if-statements" to "actual AI
+assistant." The `Modules` hardening this depended on already landed (error
+handling + required `logger`, see Done below), so a flaky/unreachable Ollama
+server can no longer brick the Brain.
 
-## 2. Local LLM as a fallback brain
+**Recommended model:** `llama3.2:1b` (~1.3GB disk, ~1-2GB RAM) as the
+default — small enough to run on modest hardware while still being
+coherent, and a reasonable balance for a learning project that isn't
+trying to be a serious chatbot yet. `qwen2.5:0.5b` (~400MB disk, <1GB RAM)
+is a lighter fallback recommendation for weaker machines, and
+`gemma3:1b`/`gemma2:2b` are alternatives in the same weight class if
+`llama3.2:1b`'s answers turn out unsatisfying.
 
-Per the "Offline First" principle: instead of `I heard: ...` for unknown
-input, a `LanguageModule` could pass the message to a local model (e.g. via
-Ollama). Rule-based commands stay instant and free; only unmatched input
-goes to the model. This is the bridge from "chatbot with if-statements" to
-"actual AI assistant" — the Modules system it depends on now exists
-(`src/modules/module.py`), so a `LanguageModule` just needs to be written.
-Note: per the permanent development rules, no external AI frameworks
-(LangChain, LangGraph, etc.) before v0.1 — a direct Ollama HTTP call is fine,
-a framework wrapper is not. Do suggestion #1 first, or a flaky local model
-server will brick the Brain the first time it hiccups.
+**Recommended endpoint:** Ollama's local server (`http://localhost:11434`)
+exposes `POST /api/generate` (single-turn: `{"model": ..., "prompt": ...,
+"stream": false}` in, generated text in the `response` field out) and
+`POST /api/chat` (message history: `{"model": ..., "messages": [{"role":
+"user", "content": ...}], "stream": false}` in, text in `message.content`
+out). First cut should use `/api/generate` — the codebase has no
+conversation-history concept threaded into a fallback yet, so `/api/chat`'s
+`messages` list would always be exactly one message, a needless complication.
+`/api/chat` is the natural v2 once `ShortMemory`'s session log can be
+passed through as real chat history.
 
-## 3. Notes-only recall/search
+**Class shape:** an `OllamaClient` utility mirroring `UpdateChecker`'s
+constructor-injection style (`base_url`, `model`, a short 2-3s timeout for
+a `GET /api/tags` liveness+model-availability pre-flight, a longer 30-120s
+timeout for the actual generate call, since a cold model can take several
+seconds to load into RAM on its first call — reusing `UpdateChecker`'s 3s
+default would misfire constantly on generation). `urllib.error.URLError`
+means the server itself isn't reachable (connection refused); `urllib.
+error.HTTPError` with a 404 and a `{"error": "model '...' not found, try
+pulling it first"}` body means the server is up but the model isn't pulled
+— both are real, expected failure modes, not edge cases.
 
-`LongMemory` entries are now tagged `"chat"` or `"note"` (v0.0.9), but
-`recall`/`search` still show both mixed together — asking to `search milk`
-after `remember buy milk` returns the note *and* the raw `remember buy milk`
-command text *and* the bot's "Got it, I'll remember..." confirmation, three
-near-duplicate hits for one real memory. Worth adding a notes-only view (e.g.
-a `notes` trigger, or filtering `recall`/`search` to `type == "note"` by
-default with an explicit way to see full chat history) now that the tagging
-exists to make it possible.
+`LanguageModule(Module)` wraps `OllamaClient` and implements `start()` as
+the `/api/tags` pre-flight — on failure it simply raises a clear error
+(e.g. `ConnectionError("Ollama not reachable")`), letting `Modules.
+start_all()`'s now-hardened try/except catch it, log `"Module 'language'
+failed to start: ..."`, and move on — no crash, no special-cased logger
+dependency needed inside `LanguageModule` itself. The module tracks its
+own `available` flag so callers know whether to bother consulting it.
 
-## 4. Sync the version number from one place
+**Integration point:** `CommandRegistry.dispatch()` (`src/commands/
+registry.py`) currently always falls back to `return DispatchResult(f"I
+heard: {message}")` when no command matches. This needs a way to consult
+the `LanguageModule` first when it's available — e.g. `CommandRegistry`
+gains an optional `language_module` param, consulted only when no command
+matched *and* the module reports itself available, falling through to the
+existing `I heard: ...` string otherwise, so an unreachable Ollama server
+degrades to today's exact baseline behavior, not a broken one.
 
-`0.0.9` currently has to be hand-edited in three files kept in sync
-manually: `pyproject.toml`, `config.json`, and `Config.DEFAULTS` in
-`src/config/config.py`. Worth having `Config` (or `main.py`) read the
-version from `pyproject.toml` (or `importlib.metadata.version("astra")`
-once installed) instead of duplicating the literal string three times —
-low urgency, but it's exactly the kind of thing that quietly drifts.
+Reminder per the permanent development rules: no LangChain, no LangGraph,
+no `ollama` pip package — stdlib `urllib.request`/`urllib.error`/`json`
+only, same as `UpdateChecker`.
 
-## 5. CI only tests one Python version
-
-`pyproject.toml` declares `requires-python = ">=3.10"`, but
-`.github/workflows/tests.yml` only runs on `3.14`. A 3.10/3.11/3.12/3.13-only
-breakage would pass CI and ship undetected — worth a small version matrix
-(`3.10`, `3.14`) if the >=3.10 claim is meant to be real, or narrowing
-`requires-python` if 3.14+ is the actual intent.
+This is a design only, not yet implemented — no `LanguageModule`,
+`OllamaClient`, or registry wiring code exists yet.
 
 ---
 
 ## Done
 
+- ~~**Module lifecycle needs error handling**~~ — Done in v0.0.10:
+  `Modules` now takes a required `logger` (injected the same way
+  `UpdateChecker` is) and `start_all()`/`stop_all()` catch a failing
+  module's exception, log it by name via `logger.error()`, and keep
+  going instead of stranding `Brain.start()`/`stop()` mid-transition;
+  covered by `tests/test_modules.py` and
+  `tests/test_brain.py::TestModulesLifecycle`.
+- ~~**Notes-only recall/search**~~ — Done in v0.0.10: `recall`,
+  `what do you remember`, and `search <text>` now filter to
+  `type == "note"` entries only, so `search milk` no longer surfaces the
+  raw `remember buy milk` command echo or the bot's own confirmation as
+  false hits; a new `history` trigger shows the last 5 entries
+  unfiltered (notes and chat both) for anyone who wants the old mixed
+  view; covered by `tests/test_brain.py::TestNotes`.
+- ~~**Sync the version number from one place**~~ — Done in v0.0.10:
+  `Config.DEFAULTS` no longer carries a hardcoded version literal —
+  `config.json` is the sole runtime source of truth, falling back to an
+  honest `"0.0.0-unknown"` sentinel (instead of a silently-stale
+  duplicate) if the file is missing the key; `pyproject.toml`'s version
+  stays the hand-maintained packaging/release-tag source (neither
+  `importlib.metadata` nor stdlib TOML parsing are safe zero-dependency
+  options here — confirmed `importlib.metadata.version("astra")`
+  returns a stale value on an editable install lagging behind
+  `pyproject.toml`, and `tomllib` needs 3.11+ while this project
+  supports 3.10+); the remaining two-literal sync is now a reminder in
+  the release checklist in `docs/MANIFEST.md`; covered by
+  `tests/test_config.py`.
+- ~~**CI only tests one Python version**~~ — Done in v0.0.10:
+  `.github/workflows/tests.yml` now runs the suite across
+  `python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]` with
+  `fail-fast: false`, actually exercising the `requires-python = ">=3.10"`
+  claim in `pyproject.toml` instead of testing 3.14 alone.
 - ~~**Startup briefing steps**~~ — Done in v0.0.9: `Brain.start()` logs
   the current date/time and how long ago the previous session's last
   memory entry was (or "This is our first session!"); covered by

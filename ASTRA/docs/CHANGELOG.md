@@ -574,3 +574,26 @@ real complexity this "do not overengineer" project doesn't need.
   so the cost is almost entirely `setup-python` provisioning time per
   job, and GitHub Actions runs the matrix in parallel
 
+## Changed
+
+- Bumped version to `0.0.10` in `pyproject.toml` and `config.json` —
+  now only two files instead of three, since `Config.DEFAULTS` no
+  longer holds a copy (this commit's own payoff, demonstrated
+  immediately)
+- Rewrote `docs/suggestions.md`'s local-LLM entry into a full design doc
+  (recommended model, endpoint, class shape, integration point) covering
+  the planned v0.1.0 `LanguageModule` — design only, no code yet
+
+## Notes
+
+Run the tests with: `python -m pytest` (110 tests)
+
+This version closes out all four items that were pending in
+`docs/suggestions.md` after v0.0.9: Modules lifecycle error handling,
+notes-only recall/search, a single runtime source for the version
+number, and a full CI Python version matrix. The only remaining
+suggestion is the local-LLM design doc's own implementation, deferred
+to a future session now that the Modules system it depends on is solid.
+
+---
+
