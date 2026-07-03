@@ -21,10 +21,7 @@ class Logger:
         timestamp = datetime.now().strftime("%H:%M:%S")
         entry = f"[{timestamp}] {level} {message}"
         self.logs.append(entry)
-        try:
-            print(entry)
-        except UnicodeEncodeError:
-            print(entry.encode("ascii", errors="replace").decode("ascii"))
+        self._print(entry)
         if self.log_to_file:
             try:
                 self.log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -34,7 +31,14 @@ class Logger:
                 self.log_to_file = False
                 failure_entry = f"[{timestamp}] WARNING Logging to file failed ({error}); file logging disabled for this session."
                 self.logs.append(failure_entry)
-                print(failure_entry)
+                self._print(failure_entry)
+
+    @staticmethod
+    def _print(entry):
+        try:
+            print(entry)
+        except UnicodeEncodeError:
+            print(entry.encode("ascii", errors="replace").decode("ascii"))
 
     def debug(self, message):
         self.log(message, "DEBUG")

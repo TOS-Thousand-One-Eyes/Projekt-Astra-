@@ -158,6 +158,25 @@ def test_log_call_with_invalid_level_falls_back_to_info_instead_of_crashing():
     assert any("INFO" in entry and "message" in entry for entry in logs)
 
 
+def test_file_write_failure_warning_survives_a_print_encoding_failure(tmp_path, monkeypatch):
+    calls = []
+
+    def flaky_print(*args, **kwargs):
+        calls.append(args)
+        if len(calls) == 2:  # the failure entry's own first print attempt
+            raise UnicodeEncodeError("charmap", "x", 0, 1, "bad char")
+
+    monkeypatch.setattr(builtins, "print", flaky_print)
+    blocker = tmp_path / "blocker"
+    blocker.write_text("not a directory", encoding="utf-8")
+    logger = Logger(log_to_file=True, log_path=blocker / "astra.log")
+
+    logger.log("hello")
+
+    assert len(calls) == 3
+    assert any("Logging to file failed" in entry for entry in logger.get_logs())
+
+
 def test_print_failure_falls_back_to_ascii_instead_of_crashing(monkeypatch):
     calls = []
 
