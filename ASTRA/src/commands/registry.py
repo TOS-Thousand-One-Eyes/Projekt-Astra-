@@ -9,14 +9,34 @@ from commands.memory_command import MemoryCommand
 
 class CommandRegistry:
 
-    def __init__(self, commands, language_module=None):
+    def __init__(self, commands, language_module=None, logger=None):
         self.commands = commands
         self.language_module = language_module
+        self.logger = logger
 
     def dispatch(self, message):
-        normalized = normalize(message)
+        try:
+            normalized = normalize(message)
+        except Exception as error:
+            if self.logger:
+                self.logger.error(
+                    f"Failed to normalize message {message!r}: {type(error).__name__}: {error}"
+                )
+            return DispatchResult(
+                "Something went wrong handling that. I've logged it so it can be looked into."
+            )
         for command in self.commands:
-            response = command.handle(message, normalized)
+            try:
+                response = command.handle(message, normalized)
+            except Exception as error:
+                if self.logger:
+                    self.logger.error(
+                        f"Command '{type(command).__name__}' failed on message {message!r}: "
+                        f"{type(error).__name__}: {error}"
+                    )
+                return DispatchResult(
+                    "Something went wrong handling that. I've logged it so it can be looked into."
+                )
             if response is not None:
                 return DispatchResult(response, command.stops_brain)
         if looks_like_shell_command(message):
@@ -28,7 +48,7 @@ class CommandRegistry:
         return DispatchResult(f"I heard: {message}")
 
 
-def build_default_registry(config, memory, language_module=None):
+def build_default_registry(config, memory, language_module=None, logger=None):
     fact = FactCommand(memory)
     note = MemoryCommand(memory)
     greeting = GreetingCommand(config, memory)
@@ -39,4 +59,5 @@ def build_default_registry(config, memory, language_module=None):
     return CommandRegistry(
         [fact, note, help_command, greeting, farewell, export],
         language_module=language_module,
+        logger=logger,
     )

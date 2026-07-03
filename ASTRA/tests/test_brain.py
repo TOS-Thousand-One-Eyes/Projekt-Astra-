@@ -21,6 +21,14 @@ class FailingModule(Module):
         raise RuntimeError("boom")
 
 
+class FailingCommand:
+
+    stops_brain = False
+
+    def handle(self, message, normalized):
+        raise RuntimeError("command boom")
+
+
 class TestLifecycle:
 
     def test_brain_starts_offline(self, brain):
@@ -200,6 +208,60 @@ class TestCommands:
         assert "shell command" in response
 
 
+class TestFailureFlagging:
+
+    def test_failing_command_does_not_crash_dispatch(self):
+        registry = CommandRegistry([FailingCommand()])
+        result = registry.dispatch("anything")
+        assert "went wrong" in result.response
+
+    def test_failing_command_is_logged_as_an_error(self):
+        logger = Logger()
+        registry = CommandRegistry([FailingCommand()], logger=logger)
+        registry.dispatch("anything")
+
+        logs = logger.get_logs()
+        assert any("ERROR" in entry and "FailingCommand" in entry and "command boom" in entry for entry in logs)
+
+    def test_failing_command_without_logger_does_not_crash(self):
+        registry = CommandRegistry([FailingCommand()])
+        result = registry.dispatch("anything")
+        assert result.response
+
+    def test_brain_flags_a_failing_command_instead_of_crashing(self, config, memory):
+        brain = Brain(
+            Logger(),
+            config,
+            memory,
+            Modules(Logger()),
+            commands=CommandRegistry([FailingCommand()], logger=Logger()),
+        )
+        brain.start()
+
+        response = brain.receive("anything")
+
+        assert "went wrong" in response
+        assert brain.state == Brain.RUNNING
+
+    def test_brains_default_registry_is_wired_to_brains_own_logger(self, config, memory):
+        logger = Logger()
+        brain = Brain(logger, config, memory, Modules(Logger()))
+        assert brain.commands.logger is logger
+
+    def test_non_string_message_does_not_crash_dispatch(self):
+        registry = CommandRegistry([FailingCommand()])
+        result = registry.dispatch(None)
+        assert "went wrong" in result.response
+
+    def test_non_string_message_failure_is_logged(self):
+        logger = Logger()
+        registry = CommandRegistry([FailingCommand()], logger=logger)
+        registry.dispatch(None)
+
+        logs = logger.get_logs()
+        assert any("ERROR" in entry and "normalize" in entry for entry in logs)
+
+
 class TestFacts:
 
     def test_learn_and_query_fact(self, running_brain):
@@ -290,6 +352,17 @@ class TestNotes:
     def test_forget_when_nothing_matches(self, running_brain):
         response = running_brain.receive("forget bicycle")
         assert "couldn't find" in response
+
+    def test_forget_does_not_remove_a_chat_entry_with_the_same_text(self, running_brain):
+        running_brain.receive("test")
+        running_brain.receive("remember test")
+        running_brain.receive("forget test")
+
+        entries = running_brain.memory.recall_long()
+        chat_entries = [item for item in entries if item["type"] == "chat" and item["entry"] == "test"]
+        note_entries = [item for item in entries if item["type"] == "note" and item["entry"] == "test"]
+        assert chat_entries
+        assert not note_entries
 
     def test_search_finds_matching_entries(self, running_brain):
         running_brain.receive("remember buy milk")

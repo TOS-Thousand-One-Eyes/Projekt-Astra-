@@ -1,3 +1,5 @@
+import builtins
+
 from utils.logger import Logger
 
 
@@ -147,3 +149,27 @@ def test_file_write_failure_disables_further_file_write_attempts(tmp_path):
     logger.log("second")
     warning_count_after = len(logger.get_logs())
     assert warning_count_after == warning_count_before + 1
+
+
+def test_log_call_with_invalid_level_falls_back_to_info_instead_of_crashing():
+    logger = Logger()
+    logger.log("message", level="TRACE")
+    logs = logger.get_logs()
+    assert any("INFO" in entry and "message" in entry for entry in logs)
+
+
+def test_print_failure_falls_back_to_ascii_instead_of_crashing(monkeypatch):
+    calls = []
+
+    def flaky_print(*args, **kwargs):
+        calls.append(args)
+        if len(calls) == 1:
+            raise UnicodeEncodeError("charmap", "x", 0, 1, "bad char")
+
+    monkeypatch.setattr(builtins, "print", flaky_print)
+    logger = Logger()
+
+    logger.log("hello ❤")
+
+    assert len(calls) == 2
+    assert any("hello" in entry for entry in logger.get_logs())

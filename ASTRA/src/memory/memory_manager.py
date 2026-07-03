@@ -29,7 +29,7 @@ class MemoryManager:
         return self.long_memory.search(query)
 
     def forget(self, entry):
-        removed = self.long_memory.forget(entry)
+        removed = self.long_memory.forget(entry, entry_type="note")
         self.short_memory.forget(entry)
         return removed
 

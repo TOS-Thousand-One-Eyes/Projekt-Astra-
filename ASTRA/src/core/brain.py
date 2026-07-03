@@ -28,6 +28,7 @@ class Brain:
             config,
             memory,
             language_module=self._language_module(),
+            logger=logger,
         )
         self.update_checker = update_checker
         self._session_started_at = None

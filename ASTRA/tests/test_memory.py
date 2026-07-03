@@ -159,6 +159,26 @@ def test_long_memory_forget_is_case_insensitive(tmp_path):
     assert memory.recall() == []
 
 
+def test_long_memory_forget_with_type_only_removes_matching_type(tmp_path):
+    memory = LongMemory(tmp_path / "long_memory.json")
+    memory.remember("test", entry_type="chat")
+    memory.remember("test", entry_type="note")
+    removed = memory.forget("test", entry_type="note")
+    assert removed == 1
+    remaining = memory.recall()
+    assert len(remaining) == 1
+    assert remaining[0]["type"] == "chat"
+
+
+def test_long_memory_forget_without_type_removes_all_matching_text(tmp_path):
+    memory = LongMemory(tmp_path / "long_memory.json")
+    memory.remember("test", entry_type="chat")
+    memory.remember("test", entry_type="note")
+    removed = memory.forget("test")
+    assert removed == 2
+    assert memory.recall() == []
+
+
 def test_short_memory_forget_removes_matching_entry_case_insensitively():
     memory = ShortMemory()
     memory.remember("Buy Milk")
@@ -253,12 +273,21 @@ def test_memory_manager_search_long_delegates(memory):
 
 
 def test_memory_manager_forget_delegates(memory):
-    memory.remember("buy milk")
+    memory.remember("buy milk", entry_type="note")
     assert memory.forget("buy milk") == 1
     assert memory.recall_long() == []
 
 
 def test_memory_manager_forget_also_clears_short_memory(memory):
-    memory.remember("buy milk")
+    memory.remember("buy milk", entry_type="note")
     memory.forget("buy milk")
     assert memory.recall() == []
+
+
+def test_memory_manager_forget_does_not_remove_a_chat_entry_with_the_same_text(memory):
+    memory.remember("buy milk", entry_type="chat")
+    memory.remember("buy milk", entry_type="note")
+    removed = memory.forget("buy milk")
+    assert removed == 1
+    remaining_types = [item["type"] for item in memory.recall_long()]
+    assert remaining_types == ["chat"]

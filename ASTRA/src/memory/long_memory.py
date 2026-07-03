@@ -30,10 +30,16 @@ class LongMemory:
         query_lower = query.lower()
         return [item for item in self.entries if query_lower in str(item.get("entry", "")).lower()]
 
-    def forget(self, entry_text):
+    def forget(self, entry_text, entry_type=None):
         target = entry_text.lower()
+
+        def matches(item):
+            same_text = str(item.get("entry", "")).lower() == target
+            same_type = entry_type is None or item.get("type") == entry_type
+            return same_text and same_type
+
         before = len(self.entries)
-        self.entries = [item for item in self.entries if str(item.get("entry", "")).lower() != target]
+        self.entries = [item for item in self.entries if not matches(item)]
         removed = before - len(self.entries)
         if removed:
             self.save()

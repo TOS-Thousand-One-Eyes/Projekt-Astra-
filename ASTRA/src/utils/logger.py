@@ -14,12 +14,17 @@ class Logger:
         self.logs = []
 
     def log(self, message, level="INFO"):
+        if level not in LEVELS:
+            level = "INFO"
         if LEVELS.index(level) < LEVELS.index(self.level):
             return
         timestamp = datetime.now().strftime("%H:%M:%S")
         entry = f"[{timestamp}] {level} {message}"
         self.logs.append(entry)
-        print(entry)
+        try:
+            print(entry)
+        except UnicodeEncodeError:
+            print(entry.encode("ascii", errors="replace").decode("ascii"))
         if self.log_to_file:
             try:
                 self.log_path.parent.mkdir(parents=True, exist_ok=True)
