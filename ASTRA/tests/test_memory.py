@@ -48,6 +48,21 @@ def test_long_memory_missing_file_sets_no_load_warning(tmp_path):
     assert memory.load_warning is None
 
 
+def test_long_memory_falls_back_to_empty_on_wrong_shape_json(tmp_path):
+    path = tmp_path / "long_memory.json"
+    path.write_text('{"oops": 1}', encoding="utf-8")
+    memory = LongMemory(path)
+    assert memory.recall() == []
+
+
+def test_long_memory_wrong_shape_json_sets_a_load_warning(tmp_path):
+    path = tmp_path / "long_memory.json"
+    path.write_text('{"oops": 1}', encoding="utf-8")
+    memory = LongMemory(path)
+    assert memory.load_warning is not None
+    assert "long_memory.json" in memory.load_warning
+
+
 def test_long_memory_save_uses_temp_file_then_replaces_target(tmp_path):
     path = tmp_path / "long_memory.json"
     memory = LongMemory(path)
@@ -93,6 +108,18 @@ def test_long_memory_forget_does_not_crash_on_entry_missing_entry_key(tmp_path):
     memory = LongMemory(tmp_path / "long_memory.json")
     memory.entries.append({"timestamp": "2020-01-01T00:00:00", "type": "note"})
     assert memory.forget("anything") == 0
+
+
+def test_long_memory_search_does_not_crash_on_non_string_entry_value(tmp_path):
+    memory = LongMemory(tmp_path / "long_memory.json")
+    memory.entries.append({"timestamp": "2020-01-01T00:00:00", "entry": 42, "type": "note"})
+    assert memory.search("42") == [memory.entries[0]]
+
+
+def test_long_memory_forget_does_not_crash_on_non_string_entry_value(tmp_path):
+    memory = LongMemory(tmp_path / "long_memory.json")
+    memory.entries.append({"timestamp": "2020-01-01T00:00:00", "entry": 42, "type": "note"})
+    assert memory.forget("42") == 1
 
 
 def test_long_memory_forget_removes_matching_entry_and_returns_count(tmp_path):
@@ -165,6 +192,21 @@ def test_facts_falls_back_to_empty_on_corrupt_file(tmp_path):
 def test_facts_corrupt_file_sets_a_load_warning(tmp_path):
     path = tmp_path / "facts.json"
     path.write_text("{not valid json", encoding="utf-8")
+    facts = Facts(path)
+    assert facts.load_warning is not None
+    assert "facts.json" in facts.load_warning
+
+
+def test_facts_falls_back_to_empty_on_wrong_shape_json(tmp_path):
+    path = tmp_path / "facts.json"
+    path.write_text("[1, 2, 3]", encoding="utf-8")
+    facts = Facts(path)
+    assert facts.all() == {}
+
+
+def test_facts_wrong_shape_json_sets_a_load_warning(tmp_path):
+    path = tmp_path / "facts.json"
+    path.write_text("[1, 2, 3]", encoding="utf-8")
     facts = Facts(path)
     assert facts.load_warning is not None
     assert "facts.json" in facts.load_warning

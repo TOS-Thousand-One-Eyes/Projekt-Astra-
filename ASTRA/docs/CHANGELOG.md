@@ -1001,3 +1001,91 @@ kept from the incoming branch; the one real feature collision (response
 length preference) was resolved in favor of this session's existing,
 already-tested implementation. Full suite re-run after resolution, before
 committing the merge.
+
+---
+
+# v0.0.16 - 03.07.2026
+
+## Fixed
+
+### A 6-agent post-merge audit found real bugs the merged-in branch shipped without noticing
+
+**Why:** The Ollama fallback merged in from the parallel branch (v0.0.15)
+had never been audited against this project's own conventions — it
+arrived as finished code, not as work-in-progress reviewed here. A
+6-way parallel audit (core/config, commands, memory, modules+Ollama,
+utils+main.py, tests+docs) went through it, and the rest of the merge
+result, looking specifically for anything the merge introduced or missed.
+
+- **`LanguageModule.respond()` silently swallowed runtime failures** —
+  confirmed independently by three of the six auditors as the most
+  serious finding. It caught any exception from the local model, set
+  `available = False`, and returned `None` with zero logging anywhere;
+  `CommandRegistry` then quietly reverted to the `"I heard: ..."` echo.
+  If Ollama dropped mid-session, Astra silently downgraded for the rest
+  of the session with no trace in the logs — exactly the anti-pattern
+  `docs/MANIFEST.md`'s OBSERVABLE FALLBACKS section exists to prevent,
+  just never applied to this feature since it didn't go through that
+  process. `LanguageModule` now takes an optional `logger` (same
+  constructor-injection convention as `Modules`/`UpdateChecker`) and
+  logs a `WARNING` with the actual error when a runtime failure
+  disables it; `main.py` passes the existing logger through.
+- **`Facts.load()`/`LongMemory.load()` had no wrong-JSON-shape guard**,
+  unlike `Config._load()`, which already checks `isinstance(loaded,
+  dict)`. A `facts.json`/`long_memory.json` that's syntactically valid
+  JSON but the wrong shape (e.g. a list instead of an object) parsed
+  without error and silently set `self.facts`/`self.entries` to the
+  wrong type — worse than a silent fallback, this crashed **uncaught**
+  on the first `recall`/`search`/`forget`/fact command afterward, and
+  `main.py`'s loop only catches `KeyboardInterrupt`/`EOFError`. Both now
+  check the loaded shape the same way `Config` does, falling back to
+  empty state with a `load_warning`, surfaced the same way as every
+  other fallback.
+- **`LongMemory.search()`/`forget()` crashed on a non-string but
+  present `"entry"` value** (e.g. a hand-edited `"entry": 42`) — the
+  existing `.get("entry", "")` guard only covers a *missing* key, not a
+  wrong-typed one, and `.lower()` doesn't exist on an `int`. Both now
+  coerce with `str(...)` before comparing.
+- **An unclosed `<think>` tag leaked the model's raw reasoning trace**
+  — `OllamaClient`'s stripping regex required a closing `</think>`, so
+  a response truncated mid-thought (a real failure mode for local
+  models hitting a length limit) passed through completely unstripped,
+  literal tag and all. Now also strips from an unclosed `<think>` to
+  the end of the response.
+- **An empty/whitespace-only message could reach the network** — the
+  blank-input guard only existed in `main.py`'s input loop;
+  `CommandRegistry.dispatch()` had no guard of its own, so any other
+  caller could send blank input straight to the local model. Now
+  guarded in `dispatch()` itself.
+- **`LanguageModule.start()` reported every failure as "Ollama not
+  reachable"**, even when the server responded with a real HTTP error
+  (e.g. model not pulled) rather than being unreachable — collapsing
+  two different, actionable problems into one message, losing a
+  distinction the original design (`docs/suggestions.md`) called for.
+  Now catches `urllib.error.HTTPError` separately and reports the
+  status code.
+
+## Changed
+
+- Fixed a merge-resolution artifact in `tests/test_brain.py` (a missing
+  blank line between `TestNotes` and `TestMemoryStats`) and a stale
+  self-referential cross-link in `docs/suggestions.md`'s TFT-coaching
+  item (pointed at itself as "#3 above" and still described the local
+  LLM as not yet built, after it had already shipped).
+- Bumped version to `0.0.16` in `pyproject.toml` and `config.json`.
+
+## Notes
+
+Run the tests with: `python -m pytest` (185 tests)
+
+Process: 6 parallel read-only audit agents, each scoped to a different
+area, none aware of the others' findings — 3 independently flagged the
+same `LanguageModule` bug, which is a stronger signal than any one of
+them finding it alone. Every fix above has a new regression test that
+asserts the actual fixed behavior (a warning is logged, a wrong-shaped
+file falls back cleanly, a non-string entry doesn't crash, an unclosed
+tag is stripped, a blank message never reaches `generate()`), not just
+"didn't crash" — per this project's standing rule that a fallback test
+must prove the fallback is visible, not just survivable. A second round
+of 6 fresh audit agents follows to re-verify these fixes before
+anything is reported back for a push decision.

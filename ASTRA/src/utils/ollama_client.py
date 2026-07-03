@@ -3,6 +3,7 @@ import re
 import urllib.request
 
 THINK_BLOCK_PATTERN = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
+UNCLOSED_THINK_PATTERN = re.compile(r"<think>.*", re.IGNORECASE | re.DOTALL)
 
 
 class OllamaClient:
@@ -50,7 +51,8 @@ class OllamaClient:
         if not isinstance(response, str):
             raise ValueError("Ollama returned an invalid response.")
 
-        cleaned = THINK_BLOCK_PATTERN.sub("", response).strip()
+        cleaned = THINK_BLOCK_PATTERN.sub("", response)
+        cleaned = UNCLOSED_THINK_PATTERN.sub("", cleaned).strip()
         if not cleaned:
             raise ValueError("Ollama returned an empty response.")
         return cleaned

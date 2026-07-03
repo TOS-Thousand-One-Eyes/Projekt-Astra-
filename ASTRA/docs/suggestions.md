@@ -45,9 +45,9 @@ one-off-ing a workaround, next time this file is touched.
 
 Erik's real near-term want, raised this session: Astra watching the screen
 during a TFT match and coaching live. Honest scope check before this goes
-anywhere: it needs **both** a working local LLM (#3 above) **and** Vision
-(roadmap v0.2.2 — "OCR, screenshots, basic 'what's on screen'"), neither of
-which exists yet. It's also not really an LLM-reasoning problem underneath
+anywhere: it needs **both** the local LLM fallback (now shipped, see Done
+below) **and** Vision (roadmap v0.2.2 — "OCR, screenshots, basic 'what's on
+screen'"), which doesn't exist yet. It's also not really an LLM-reasoning problem underneath
 — TFT patches every ~2 weeks and rotates trait/item sets every ~4 months,
 so a generic local model's training data goes stale fast regardless of
 which one is running; real coaching value needs live/curated current-meta

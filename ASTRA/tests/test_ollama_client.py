@@ -48,6 +48,34 @@ def test_generate_posts_prompt_and_returns_cleaned_response():
     ]
 
 
+def test_generate_strips_unclosed_think_block():
+    client = OllamaClient(
+        "http://localhost:11434",
+        "qwen3:4b",
+        request_json=lambda url, method="GET", data=None, timeout=3: {
+            "response": "<think>reasoning that got cut off before it could close"
+        },
+    )
+
+    with pytest.raises(ValueError, match="empty response"):
+        client.generate("hello")
+
+
+def test_generate_strips_unclosed_think_block_preceding_real_content():
+    client = OllamaClient(
+        "http://localhost:11434",
+        "qwen3:4b",
+        request_json=lambda url, method="GET", data=None, timeout=3: {
+            "response": "preamble\n<think>reasoning that got cut off"
+        },
+    )
+
+    response = client.generate("hello")
+
+    assert response == "preamble"
+    assert "<think>" not in response
+
+
 def test_generate_raises_on_empty_cleaned_response():
     client = OllamaClient(
         "http://localhost:11434",

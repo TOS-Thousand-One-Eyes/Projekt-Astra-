@@ -174,6 +174,26 @@ class TestCommands:
 
         assert brain.receive("something random") == "I heard: something random"
 
+    def test_blank_message_does_not_reach_language_module(self, config, memory):
+        calls = []
+
+        class StubClient:
+            def ensure_available(self):
+                return None
+
+            def generate(self, prompt):
+                calls.append(prompt)
+                return "should not happen"
+
+        modules = Modules(Logger())
+        modules.add_module(LanguageModule(StubClient()))
+        brain = Brain(Logger(), config, memory, modules)
+        brain.start()
+
+        brain.receive("   ")
+
+        assert calls == []
+
     def test_stray_shell_command_is_not_echoed(self, running_brain):
         response = running_brain.receive(r"C:\Python\python.exe c:/Development/ASTRA/src/main.py")
         assert "I heard" not in response
@@ -313,6 +333,7 @@ class TestNotes:
         running_brain.receive("remember buy milk")
         response = running_brain.receive("history")
         assert "remember buy milk" in response
+
 
 class TestMemoryStats:
 

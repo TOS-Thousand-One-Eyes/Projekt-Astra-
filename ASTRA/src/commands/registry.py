@@ -21,7 +21,7 @@ class CommandRegistry:
                 return DispatchResult(response, command.stops_brain)
         if looks_like_shell_command(message):
             return DispatchResult("That looks like a shell command, not a chat message - did it get typed into the wrong window?")
-        if self.language_module and self.language_module.available:
+        if self.language_module and self.language_module.available and message.strip():
             response = self.language_module.respond(message)
             if response:
                 return DispatchResult(response)

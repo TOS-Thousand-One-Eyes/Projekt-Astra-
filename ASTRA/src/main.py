@@ -16,7 +16,7 @@ def main():
 
     if config.use_language_fallback:
         language_client = OllamaClient(config.language_base_url, config.language_model)
-        modules.add_module(LanguageModule(language_client))
+        modules.add_module(LanguageModule(language_client, logger))
 
     update_checker = UpdateChecker(config.version, logger) if config.check_for_updates else None
 

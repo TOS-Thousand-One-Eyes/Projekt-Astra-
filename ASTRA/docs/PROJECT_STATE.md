@@ -1,7 +1,7 @@
 # PROJECT_STATE.md
 
 # ASTRA
-Version: 0.0.15
+Version: 0.0.16
 Status: Active Development
 
 ---
@@ -284,7 +284,7 @@ ASTRA/
   discover them as regular packages.
 
 ### Tests
-- pytest suite (173 tests) in `tests/`, configured by `pytest.ini`.
+- pytest suite (185 tests) in `tests/`, configured by `pytest.ini`.
 - Covers lifecycle transitions, commands, facts, notes, memory search/
   forget/stats, export, preference-backed output length, modules, local
   Ollama fallback, session summary, startup briefing, memory persistence

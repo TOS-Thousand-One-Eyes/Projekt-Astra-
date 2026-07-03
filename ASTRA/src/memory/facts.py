@@ -37,7 +37,13 @@ class Facts:
             return
         try:
             with open(self.path, "r", encoding="utf-8") as f:
-                self.facts = json.load(f)
+                loaded = json.load(f)
         except (json.JSONDecodeError, OSError) as error:
             self.facts = {}
             self.load_warning = f"{self.path.name} could not be loaded ({error}); starting with empty facts."
+            return
+        if not isinstance(loaded, dict):
+            self.facts = {}
+            self.load_warning = f"{self.path.name} does not contain a JSON object; starting with empty facts."
+            return
+        self.facts = loaded

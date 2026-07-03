@@ -28,12 +28,12 @@ class LongMemory:
 
     def search(self, query):
         query_lower = query.lower()
-        return [item for item in self.entries if query_lower in item.get("entry", "").lower()]
+        return [item for item in self.entries if query_lower in str(item.get("entry", "")).lower()]
 
     def forget(self, entry_text):
         target = entry_text.lower()
         before = len(self.entries)
-        self.entries = [item for item in self.entries if item.get("entry", "").lower() != target]
+        self.entries = [item for item in self.entries if str(item.get("entry", "")).lower() != target]
         removed = before - len(self.entries)
         if removed:
             self.save()
@@ -52,7 +52,13 @@ class LongMemory:
             return
         try:
             with open(self.path, "r", encoding="utf-8") as f:
-                self.entries = json.load(f)
+                loaded = json.load(f)
         except (json.JSONDecodeError, OSError) as error:
             self.entries = []
             self.load_warning = f"{self.path.name} could not be loaded ({error}); starting with empty long-term memory."
+            return
+        if not isinstance(loaded, list):
+            self.entries = []
+            self.load_warning = f"{self.path.name} does not contain a JSON list; starting with empty long-term memory."
+            return
+        self.entries = loaded

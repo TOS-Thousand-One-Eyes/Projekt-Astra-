@@ -121,6 +121,19 @@ def test_language_module_start_raises_clear_error_when_ollama_is_unreachable():
         module.start()
 
 
+def test_language_module_start_distinguishes_http_error_from_unreachable():
+    import urllib.error
+
+    class StubClient:
+        def ensure_available(self):
+            raise urllib.error.HTTPError("http://localhost:11434/api/tags", 404, "not found", {}, None)
+
+    module = LanguageModule(StubClient())
+
+    with pytest.raises(ConnectionError, match="HTTP 404"):
+        module.start()
+
+
 def test_language_module_runtime_failure_disables_it_and_returns_none():
     class StubClient:
         def ensure_available(self):
@@ -134,3 +147,34 @@ def test_language_module_runtime_failure_disables_it_and_returns_none():
 
     assert module.respond("hello") is None
     assert module.available is False
+
+
+def test_language_module_runtime_failure_logs_a_warning_when_logger_is_present():
+    class StubClient:
+        def ensure_available(self):
+            return None
+
+        def generate(self, prompt):
+            raise OSError("connection dropped")
+
+    logger = Logger()
+    module = LanguageModule(StubClient(), logger)
+    module.start()
+    module.respond("hello")
+
+    logs = logger.get_logs()
+    assert any("WARNING" in entry and "Local language model failed" in entry for entry in logs)
+
+
+def test_language_module_runtime_failure_without_logger_does_not_crash():
+    class StubClient:
+        def ensure_available(self):
+            return None
+
+        def generate(self, prompt):
+            raise OSError("connection dropped")
+
+    module = LanguageModule(StubClient())
+    module.start()
+
+    assert module.respond("hello") is None
