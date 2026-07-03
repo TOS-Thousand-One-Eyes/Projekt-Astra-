@@ -368,6 +368,14 @@ class TestFacts:
         assert "I'll remember" not in response
         assert running_brain.memory.all_facts() == {}
 
+    def test_whitespace_only_fact_key_is_not_learned(self, running_brain):
+        response = running_brain.receive("my   is blue")
+        assert "I'll remember" not in response
+        assert running_brain.memory.all_facts() == {}
+
+    def test_trigger_with_an_embedded_newline_still_matches(self, brain):
+        assert "Goodbye" in brain.process("bye!\n!")
+
     def test_falsy_fact_value_is_still_reported_as_known(self, running_brain, memory):
         memory.facts.facts["age"] = 0
         assert running_brain.receive("what is my age?") == "Your age is 0."
