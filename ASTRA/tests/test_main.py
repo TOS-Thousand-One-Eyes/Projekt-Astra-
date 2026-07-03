@@ -1,4 +1,5 @@
 import builtins
+import json
 
 import pytest
 
@@ -10,7 +11,14 @@ from utils.logger import Logger
 
 @pytest.fixture
 def isolated_main(monkeypatch, tmp_path):
-    monkeypatch.setattr(main_module, "Config", lambda: Config(path=tmp_path / "config.json"))
+    # check_for_updates off so main() never constructs an UpdateChecker -
+    # tests must not depend on the network.
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps({"version": "0.0.0", "check_for_updates": False}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(main_module, "Config", lambda: Config(path=config_path))
     monkeypatch.setattr(main_module, "MemoryManager", lambda: MemoryManager(data_dir=tmp_path))
 
 
