@@ -1250,8 +1250,17 @@ log message; `\r\n` missing from normalize's strip set), both fixed.
   (now pattern-based), and PROJECT_STATE's file tree said `LICENSE` for
   a file named `LICENCE`.
 
+A second 2-agent verification recheck over those fixes found and fixed
+four follow-ups: a timezone-aware hand-edited timestamp still crashed
+startup (parsed fine, then naive-minus-aware subtraction raised outside
+the guard); a UTF-16 `facts.json`/`long_memory.json` crashed uncaught in
+`MemoryManager()` (the BOM fix's own PowerShell scenario — `Config`
+already handled it); the fact-key normalization warning didn't disclose
+collisions; and the missing-version warning was inaccurate with update
+checks disabled.
+
 ## Notes
 
-Run the tests with: `python -m pytest` (261 tests)
+Run the tests with: `python -m pytest` (265 tests)
 
 No test touches the real network or the real `data/` directory anymore.
