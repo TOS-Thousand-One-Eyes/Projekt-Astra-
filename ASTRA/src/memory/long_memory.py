@@ -63,7 +63,7 @@ class LongMemory:
             # the user's long-term memory to empty.
             with open(self.path, "r", encoding="utf-8-sig") as f:
                 loaded = json.load(f)
-        except (json.JSONDecodeError, OSError) as error:
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError) as error:
             self.entries = []
             self.load_warning = f"{self.path.name} could not be loaded ({error}); starting with empty long-term memory."
             return

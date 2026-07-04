@@ -42,7 +42,7 @@ class Facts:
             # the user's facts to empty.
             with open(self.path, "r", encoding="utf-8-sig") as f:
                 loaded = json.load(f)
-        except (json.JSONDecodeError, OSError) as error:
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError) as error:
             self.facts = {}
             self.load_warning = f"{self.path.name} could not be loaded ({error}); starting with empty facts."
             return

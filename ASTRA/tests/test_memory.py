@@ -390,3 +390,25 @@ def test_long_memory_load_tolerates_a_utf8_bom(tmp_path):
 
     assert len(memory.recall()) == 1
     assert memory.load_warning is None
+
+
+def test_facts_utf16_file_falls_back_to_empty_with_a_warning(tmp_path):
+    import json
+
+    path = tmp_path / "facts.json"
+    path.write_bytes(json.dumps({"name": "Erik"}).encode("utf-16"))
+    facts = Facts(path)
+
+    assert facts.all() == {}
+    assert facts.load_warning is not None
+
+
+def test_long_memory_utf16_file_falls_back_to_empty_with_a_warning(tmp_path):
+    import json
+
+    path = tmp_path / "long_memory.json"
+    path.write_bytes(json.dumps([]).encode("utf-16"))
+    memory = LongMemory(path)
+
+    assert memory.recall() == []
+    assert memory.load_warning is not None
