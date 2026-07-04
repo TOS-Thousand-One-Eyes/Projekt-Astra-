@@ -18,8 +18,19 @@ class Logger:
             level = "INFO"
         if LEVELS.index(level) < LEVELS.index(self.level):
             return
+        self._emit(level, message)
+
+    def chat(self, message):
+        """Conversation output for the user - never filtered by log level.
+
+        The log stream doubles as the chat UI, so a log_level of WARNING or
+        ERROR must mute diagnostics, not Astra's replies.
+        """
+        self._emit("CHAT", message)
+
+    def _emit(self, label, message):
         timestamp = datetime.now().strftime("%H:%M:%S")
-        entry = f"[{timestamp}] {level} {message}"
+        entry = f"[{timestamp}] {label} {message}"
         self.logs.append(entry)
         self._print(entry)
         if self.log_to_file:

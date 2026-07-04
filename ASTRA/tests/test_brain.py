@@ -754,3 +754,20 @@ class TestStartupBriefing:
         brain.start()
         logs = brain.logger.get_logs()
         assert any("WARNING" in entry and "long_memory.json" in entry for entry in logs)
+
+
+class TestChatVisibility:
+
+    def test_responses_are_visible_even_at_error_log_level(self, config, memory):
+        brain = Brain(Logger(level="ERROR"), config, memory, Modules(Logger()))
+        brain.start()
+        brain.receive("hi")
+
+        assert any("Hello!" in entry for entry in brain.logger.get_logs())
+
+    def test_status_command_output_is_visible_even_at_error_log_level(self, config, memory):
+        brain = Brain(Logger(level="ERROR"), config, memory, Modules(Logger()))
+        brain.start()
+        brain.receive("status")
+
+        assert any("needs attention" in entry or "no warnings" in entry for entry in brain.logger.get_logs())

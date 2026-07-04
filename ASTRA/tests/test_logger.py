@@ -206,3 +206,16 @@ def test_file_write_survives_a_non_encodable_character(tmp_path):
     assert logger.log_to_file is True
     content = path.read_text(encoding="utf-8")
     assert "reply: hi" in content
+
+
+def test_chat_output_is_not_filtered_by_log_level():
+    logger = Logger(level="ERROR")
+    logger.chat("Astra: Hello!")
+    assert any("Astra: Hello!" in entry for entry in logger.get_logs())
+
+
+def test_chat_output_is_written_to_file_when_enabled(tmp_path):
+    path = tmp_path / "astra.log"
+    logger = Logger(level="ERROR", log_to_file=True, log_path=path)
+    logger.chat("Astra: Hello!")
+    assert "Astra: Hello!" in path.read_text(encoding="utf-8")
