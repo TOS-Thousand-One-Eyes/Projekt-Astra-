@@ -76,7 +76,9 @@ def test_long_memory_save_uses_temp_file_then_replaces_target(tmp_path):
     path = tmp_path / "long_memory.json"
     memory = LongMemory(path)
     memory.remember("first entry")
-    assert not (tmp_path / "long_memory.json.tmp").exists()
+    # No temp file of any name may remain after a save (the temp name is
+    # PID-suffixed now, so match by pattern, not the old fixed name).
+    assert list(tmp_path.glob("*.tmp")) == []
     assert path.exists()
 
 

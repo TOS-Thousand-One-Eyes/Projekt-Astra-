@@ -80,6 +80,19 @@ forgotten, not because it's next.
 
 ## Done
 
+- ~~**2026-07-04 six-agent full-codebase audit round (core+config,
+  utils, memory, commands, modules, main+integration), 8 bugs + 2 nits,
+  all fixed same-day, each its own commit**~~ — the biggest finds: a
+  valid `log_level: WARNING`/`ERROR` muted the entire chat UI including
+  `status` itself (new never-filtered `Logger.chat()` path); a lone
+  surrogate from a model response crashed the log-file write
+  (`UnicodeEncodeError` isn't an `OSError`); a mid-session memory-save
+  failure killed the REPL with an unlogged traceback; one hand-edited
+  long-memory timestamp made Astra unstartable; a UTF-8 BOM (PowerShell
+  `Out-File`) silently reset config/facts/memory to empty; hand-edited
+  fact keys/null values were listed by `facts` but denied by queries;
+  and the missing-version warning misdescribed the update check. The
+  modules agent found nothing; details in `docs/CHANGELOG.md` v0.0.18.
 - ~~**2026-07-03 follow-up audit round (3 agents: core/config/main,
   memory/commands, utils/modules), 8 findings, all fixed same-day, each
   its own commit**~~ — after the six deferred items from the morning's

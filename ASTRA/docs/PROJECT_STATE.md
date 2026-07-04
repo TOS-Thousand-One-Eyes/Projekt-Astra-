@@ -79,7 +79,7 @@ ASTRA/
 ├── pyproject.toml
 ├── pytest.ini
 ├── README.md
-├── LICENSE
+├── LICENCE
 └── .gitignore
 
 ---
@@ -99,6 +99,14 @@ ASTRA/
 - Dispatches every message to a `CommandRegistry` and only reacts to the
   result (`response`, `stops_brain`) — it does not know about individual
   commands or their trigger words.
+- `receive()` surfaces the response via `logger.chat()` — a
+  level-independent output path — so a `log_level` of WARNING/ERROR mutes
+  diagnostics, never Astra's replies. A failed `memory.remember()` save
+  (disk full, locked file) is logged at `ERROR` and the conversation
+  continues instead of the REPL dying with a raw traceback.
+- The startup last-seen line parses the newest long-memory entry's
+  timestamp defensively: a hand-edited missing/malformed timestamp logs a
+  `WARNING` and skips the line instead of making Astra unstartable.
 - Uses dependency injection for Logger, Config, MemoryManager, Modules,
   and (optionally) a CommandRegistry.
 - On `stop()`, logs a session summary: messages exchanged, new facts
@@ -142,8 +150,11 @@ ASTRA/
   after the startup log has scrolled away.
 - `FactCommand` won't learn a blank key or value (`my nickname is  ?`
   falls through instead of storing an empty fact), and the query path
-  checks `is not None` so a hand-edited falsy value (e.g. `0`) is
-  reported the same way `facts` lists it.
+  checks key *membership* so any stored fact — even a hand-edited `0` or
+  `null` — is reported the same way `facts` lists it. `Facts.load()`
+  normalizes hand-edited keys to the stripped/lowercased form `learn()`
+  writes (with a load warning), so a `"Name"` key can't be listed by the
+  summary yet unreachable by lookups.
 - `GreetingCommand` personalizes `hi`/`hello`/`hey` with the known `name`
   fact when one has been learned (e.g. "Hello, Erik!"); `Brain.start()`'s
   own greeting log line does the same.
@@ -162,7 +173,10 @@ ASTRA/
   syntactically-valid JSON that isn't an object (e.g. `null`, a bare
   number, a list) all fall back to `DEFAULTS` in code (a corrupt/
   hand-edited `config.json` no longer crashes startup — it's treated the
-  same as a missing file).
+  same as a missing file). A UTF-8 BOM (PowerShell's
+  `Out-File -Encoding utf8` default) is tolerated via `utf-8-sig` — same
+  for `facts.json`/`long_memory.json`, where a BOM used to silently reset
+  the user's memory to empty.
 - Loaded values are type-checked against their `DEFAULTS` entry
   (`_validated()`): booleans must be real JSON booleans (a hand-edited
   `"use_language_fallback": "false"` string can't silently flip the flag
@@ -285,7 +299,15 @@ ASTRA/
 - Every console print (the normal path *and* the file-failure warning)
   goes through one `_print()` helper that falls back to ASCII on a
   `UnicodeEncodeError`, so an unprintable character can't crash the
-  logger from either path.
+  logger from either path. The file write opens with
+  `errors="backslashreplace"` for the same reason — a lone surrogate
+  (which Python's `json` happily produces from a model response) is
+  written escaped instead of raising out of `log()`.
+- `chat(message)` is the conversation output path: same timestamped
+  entry (labeled `CHAT`), same in-memory list and file output, but never
+  filtered by `log_level` — the log stream doubles as the chat UI, so
+  level filtering must mute diagnostics, not Astra's replies.
+  `Brain.receive()` uses it for every response line.
 - Convenience methods: `debug()`, `info()`, `warning()`, `error()`.
 - Optional file output to `data/astra.log` (path injectable for testing),
   controlled by `config.json`'s `log_level` and `log_to_file` keys.
@@ -337,7 +359,7 @@ ASTRA/
   discover them as regular packages.
 
 ### Tests
-- pytest suite (246 tests) in `tests/`, configured by `pytest.ini`.
+- pytest suite (261 tests) in `tests/`, configured by `pytest.ini`.
 - Covers lifecycle transitions (including mid-transition crash recovery),
   commands, facts, notes, memory search/forget/stats, export,
   preference-backed output length, modules, local Ollama fallback

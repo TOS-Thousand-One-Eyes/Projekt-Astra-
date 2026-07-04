@@ -1211,8 +1211,47 @@ A 2-agent verification recheck over the full session diff confirmed
 every fix and found only two nits (a misleading word in the recovery
 log message; `\r\n` missing from normalize's strip set), both fixed.
 
+### Ten more findings from a 6-agent full-codebase round (after the bump)
+
+- **Chat output muted by `log_level`**: a valid `"log_level": "WARNING"`
+  or `"ERROR"` silenced every response — no greeting, no replies, even
+  `status` itself — because the log stream doubles as the chat UI and
+  `Brain.receive()` surfaced responses at INFO. New `Logger.chat()` is
+  never level-filtered; `receive()` uses it for the response line.
+- **Logger file-write crash on a lone surrogate**: `f.write()` raises
+  `UnicodeEncodeError` (not `OSError`) for surrogates that Python's
+  `json` happily parses out of a model response — with `log_to_file` on,
+  one weird character killed the REPL. The log file now opens with
+  `errors="backslashreplace"`.
+- **Memory-save failure killed the REPL**: `receive()`'s
+  `memory.remember()` calls sat outside every error handler, so a
+  disk-full/locked `long_memory.json` mid-session died with a raw,
+  unlogged traceback — and nullified dispatch's graceful handling of the
+  same failure two lines earlier. Now logged at ERROR, conversation
+  continues.
+- **One malformed long-memory entry made Astra unstartable**: the
+  startup last-seen line parsed the newest entry's timestamp with no
+  guard — a single hand-edited entry was strictly worse than a fully
+  corrupt file (which degrades to empty with a warning). Now skips the
+  line with a WARNING.
+- **UTF-8 BOM discarded hand-edited files**: PowerShell's
+  `Out-File -Encoding utf8` BOM made `config.json` fall back to all
+  defaults and reset `facts.json`/`long_memory.json` to empty. All three
+  loaders now read `utf-8-sig`.
+- **Hand-edited fact keys were half-visible**: `{"Name": "Erik"}` was
+  listed by `facts` but unreachable by `what is my name` and greeting
+  personalization; keys are normalized on load, with a warning.
+- **Stored `null` fact contradicted itself**: listed by `facts`, denied
+  by the query; queries now check key membership.
+- **Missing-version warning misinformed**: it claimed update checks are
+  skipped, but the check still fetches and reports the latest version —
+  reworded to say what actually happens.
+- Plus two doc/test nits: the pre-PID temp-name test had gone vacuous
+  (now pattern-based), and PROJECT_STATE's file tree said `LICENSE` for
+  a file named `LICENCE`.
+
 ## Notes
 
-Run the tests with: `python -m pytest` (246 tests)
+Run the tests with: `python -m pytest` (261 tests)
 
 No test touches the real network or the real `data/` directory anymore.
