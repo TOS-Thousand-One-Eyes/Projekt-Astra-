@@ -71,42 +71,50 @@ class TestLifecycle:
 
 class TestLifecycleRecovery:
 
-    def test_start_failure_returns_to_offline_and_reraises_the_real_error(self, config, memory):
-        memory.long_memory.entries.append({"timestamp": "not-a-timestamp", "entry": "corrupt"})
+    @pytest.fixture
+    def brain_with_failing_startup(self, config, memory, monkeypatch):
         brain = Brain(Logger(), config, memory, Modules(Logger()))
+        state = {"fail": True}
 
-        with pytest.raises(ValueError, match="not-a-timestamp"):
+        def flaky_start_all():
+            if state["fail"]:
+                raise RuntimeError("startup boom")
+
+        monkeypatch.setattr(brain.modules, "start_all", flaky_start_all)
+        return brain, state
+
+    def test_start_failure_returns_to_offline_and_reraises_the_real_error(self, brain_with_failing_startup):
+        brain, _ = brain_with_failing_startup
+
+        with pytest.raises(RuntimeError, match="startup boom"):
             brain.start()
 
         assert brain.state == Brain.OFFLINE
 
-    def test_start_can_be_retried_after_a_failed_start(self, config, memory):
-        memory.long_memory.entries.append({"timestamp": "not-a-timestamp", "entry": "corrupt"})
-        brain = Brain(Logger(), config, memory, Modules(Logger()))
+    def test_start_can_be_retried_after_a_failed_start(self, brain_with_failing_startup):
+        brain, state = brain_with_failing_startup
 
-        with pytest.raises(ValueError):
+        with pytest.raises(RuntimeError):
             brain.start()
 
-        memory.long_memory.entries.clear()
+        state["fail"] = False
         brain.start()
         assert brain.state == Brain.RUNNING
 
-    def test_retried_start_raises_the_real_error_again_not_invalid_transition(self, config, memory):
-        memory.long_memory.entries.append({"timestamp": "not-a-timestamp", "entry": "corrupt"})
-        brain = Brain(Logger(), config, memory, Modules(Logger()))
+    def test_retried_start_raises_the_real_error_again_not_invalid_transition(self, brain_with_failing_startup):
+        brain, _ = brain_with_failing_startup
 
-        with pytest.raises(ValueError):
+        with pytest.raises(RuntimeError):
             brain.start()
-        with pytest.raises(ValueError) as excinfo:
+        with pytest.raises(RuntimeError) as excinfo:
             brain.start()
 
         assert "Invalid state transition" not in str(excinfo.value)
 
-    def test_start_failure_is_logged_as_an_error(self, config, memory):
-        memory.long_memory.entries.append({"timestamp": "not-a-timestamp", "entry": "corrupt"})
-        brain = Brain(Logger(), config, memory, Modules(Logger()))
+    def test_start_failure_is_logged_as_an_error(self, brain_with_failing_startup):
+        brain, _ = brain_with_failing_startup
 
-        with pytest.raises(ValueError):
+        with pytest.raises(RuntimeError):
             brain.start()
 
         logs = brain.logger.get_logs()
@@ -739,6 +747,26 @@ class TestStartupBriefing:
         brain.start()
         logs = brain.logger.get_logs()
         assert any("Last seen" in entry and "ago" in entry for entry in logs)
+
+    def test_startup_survives_a_malformed_last_entry_timestamp(self, config, memory):
+        memory.long_memory.entries.append({"timestamp": "yesterday", "entry": "hi", "type": "chat"})
+        brain = Brain(Logger(), config, memory, Modules(Logger()))
+
+        brain.start()
+
+        assert brain.state == Brain.RUNNING
+        logs = brain.logger.get_logs()
+        assert any("WARNING" in entry and "timestamp" in entry for entry in logs)
+
+    def test_startup_survives_a_last_entry_with_no_timestamp(self, config, memory):
+        memory.long_memory.entries.append({"entry": "hi", "type": "chat"})
+        brain = Brain(Logger(), config, memory, Modules(Logger()))
+
+        brain.start()
+
+        assert brain.state == Brain.RUNNING
+        logs = brain.logger.get_logs()
+        assert any("WARNING" in entry and "timestamp" in entry for entry in logs)
 
     def test_config_load_warning_is_surfaced_at_startup(self, config, memory):
         config.load_warnings.append("test warning: something is misconfigured")

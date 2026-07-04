@@ -116,7 +116,17 @@ class Brain:
         if not long_entries:
             self.logger.log("This is our first session!")
             return
-        last_timestamp = datetime.fromisoformat(long_entries[-1]["timestamp"])
+        raw_timestamp = long_entries[-1].get("timestamp")
+        try:
+            last_timestamp = datetime.fromisoformat(raw_timestamp)
+        except (TypeError, ValueError):
+            # One hand-edited entry must not make startup impossible when a
+            # fully corrupt file already degrades gracefully with a warning.
+            self.logger.warning(
+                f"Couldn't read the newest long-term memory entry's timestamp "
+                f"({raw_timestamp!r}); skipping the last-seen line."
+            )
+            return
         ago = format_duration(self._session_started_at - last_timestamp)
         self.logger.log(f"Last seen {ago} ago.")
 
