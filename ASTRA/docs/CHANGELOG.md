@@ -1128,3 +1128,91 @@ re-verify round-1 fixes rather than trust them — reinforces that
 "tests pass" and "the fix is complete" aren't the same claim; the
 round-1 fixes for these two spots were real improvements, just not the
 full shape of the problem.
+
+---
+
+# v0.0.18 - 04.07.2026
+
+## Added
+
+### Diagnostics on demand (`diagnostics` / `status`)
+
+First concrete step toward roadmap v0.1.8 "Observability": a new
+`DiagnosticsCommand` re-reports, at any point in a session, everything
+already tracked about its health — `Config.load_warnings`,
+`MemoryManager.load_warnings()`, and whether `Logger` had to disable
+file logging after a write failure. No new tracking anywhere; it's a
+way to ask "did anything go wrong?" after the startup log scrolled away.
+
+### Commands can log (observable fallbacks reach the command layer)
+
+`Command` now takes an optional injected `logger` with a `warn()`
+helper; `build_default_registry()` wires Brain's logger into every
+command. First user: a non-text `response length` fact (hand-corrupted
+`facts.json`) now logs a WARNING instead of silently using the default
+entry limit — the last silent fallback the 2026-07-03 audit flagged.
+
+## Fixed
+
+### The six deferred findings from the 2026-07-03 six-agent audit
+
+Each landed as its own commit:
+
+- **Brain stuck-state**: a crash mid-`start()`/`stop()` left the state
+  machine stranded at STARTING/STOPPING; a retry then raised a
+  confusing "Invalid state transition" instead of the real error. Both
+  now log the failure at ERROR, escape back to OFFLINE, and re-raise.
+- **Modules error handler**: the `except` block read `module.name`
+  directly, so a malformed module without `.name` crashed the handler
+  itself; now falls back to the class name.
+- **Config type validation**: a hand-edited `"use_language_fallback":
+  "false"` (string) was truthy and silently flipped the flag on; every
+  loaded key is now type-checked against `DEFAULTS`, keeping the
+  default and warning on mismatch.
+- **Ollama `<think>` stripping**: literal `<think>`/`</think>` text in
+  a real answer got eaten as reasoning markup; all patterns are now
+  anchored to the response start, where reasoning models actually emit
+  their think block.
+- **Update checker version comparison**: `"1.2"` vs `"1.2.0"` compared
+  as different (tuple comparison); tuples are now zero-padded to the
+  same length first.
+- **Atomic-write temp paths**: `Facts`/`LongMemory` used a fixed
+  `path.tmp` name; two Astra processes saving at once could interleave
+  writes. The name now embeds the PID.
+
+### Eight more findings from a same-day 3-agent follow-up audit
+
+- **Logger**: the file-write-failure warning's own `print()` lacked the
+  `UnicodeEncodeError` fallback the primary print already had — the
+  failure handler could crash from inside itself.
+- **Config**: a non-UTF-8 `config.json` (PowerShell's `Out-File`
+  default is UTF-16) crashed startup with a raw traceback instead of
+  falling back to defaults with a warning.
+- **Config**: an unknown `log_level` (e.g. `"debug"`, `"VERBOSE"`)
+  silently became INFO; casing is now normalized and genuinely unknown
+  values warn.
+- **main**: Ctrl+C during startup (e.g. mid update-check) escaped as a
+  raw traceback; `brain.start()` is now inside the interrupt handler's
+  scope, and `stop()` only runs if the brain reached RUNNING.
+- **tests**: `test_main.py` made real HTTPS calls through the
+  un-stubbed update checker on every run; the fixture now disables
+  `check_for_updates`.
+- **normalize()**: `"bye !"` normalized to `"bye "` (trailing space)
+  and missed every exact trigger — the brain didn't stop; whitespace is
+  now stripped along with punctuation.
+- **FactCommand**: `"my nickname is  ?"` learned an empty fact; a
+  hand-edited falsy value (`0`) was denied by the query while `facts`
+  listed it. Blank keys/values are rejected; the query checks
+  `is not None`.
+- **export**: the config section omitted `language_generate_timeout`
+  (its test asserted the exact stale key set, masking the omission).
+
+A 2-agent verification recheck over the full session diff confirmed
+every fix and found only two nits (a misleading word in the recovery
+log message; `\r\n` missing from normalize's strip set), both fixed.
+
+## Notes
+
+Run the tests with: `python -m pytest` (246 tests)
+
+No test touches the real network or the real `data/` directory anymore.

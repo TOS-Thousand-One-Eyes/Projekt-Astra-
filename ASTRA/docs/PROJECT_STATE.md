@@ -1,7 +1,7 @@
 # PROJECT_STATE.md
 
 # ASTRA
-Version: 0.0.17
+Version: 0.0.18
 Status: Active Development
 
 ---
@@ -33,6 +33,7 @@ ASTRA/
 │   │   ├── fact_command.py
 │   │   ├── memory_command.py
 │   │   ├── export_command.py
+│   │   ├── diagnostics_command.py
 │   │   ├── help_command.py
 │   │   └── exit_command.py
 │   ├── config/
@@ -88,6 +89,11 @@ ASTRA/
 ### Brain
 - Holds a formal lifecycle state: OFFLINE → STARTING → RUNNING → STOPPING → OFFLINE.
 - State transitions are validated and logged; invalid transitions raise an error.
+- A crash mid-`start()`/`stop()` can't strand the state machine: both wrap
+  their bodies in try/except that logs the failure at `ERROR`, escapes back
+  to `OFFLINE` (there's a `STARTING → OFFLINE` escape transition for this),
+  and re-raises the original exception — so a retried `start()` reports the
+  real problem instead of "Invalid state transition".
 - `is_running` property drives the main loop.
 - `receive()` refuses messages when not RUNNING.
 - Dispatches every message to a `CommandRegistry` and only reacts to the
@@ -107,7 +113,14 @@ ASTRA/
 
 ### Commands
 - `Command` base class: `handle(message, normalized) -> str | None`, plus
-  `help_text` and `stops_brain` metadata.
+  `help_text` and `stops_brain` metadata. Every command also takes an
+  optional injected `logger` (held by `Command.__init__`), with a `warn()`
+  helper that no-ops when none was injected — commands log their own
+  observable fallbacks (first user: `MemoryCommand._entry_limit()` warns
+  on a non-text `response length` fact instead of silently defaulting).
+- `normalize()` strips trailing whitespace along with punctuation
+  (`"bye !"` → `"bye"`), so exact-trigger matches don't miss on a space
+  before the punctuation.
 - `CommandRegistry.dispatch()` tries each command in order, falls back to
   a local `LanguageModule` when one is available, and finally to the
   `"I heard: ..."` echo; it returns a `DispatchResult`. A stray shell
@@ -115,10 +128,22 @@ ASTRA/
   its own clearer message instead of going to the generic echo or local LLM
   (`looks_like_shell_command` in `commands/base.py`).
 - One class per command: `GreetingCommand`, `FactCommand`, `MemoryCommand`,
-  `ExportCommand`, `HelpCommand`, `ExitCommand`.
-- `build_default_registry(config, memory, language_module=None)` in
-  `commands/registry.py` is the single place that wires concrete commands
-  together, including the optional local-language fallback.
+  `ExportCommand`, `DiagnosticsCommand`, `HelpCommand`, `ExitCommand`.
+- `build_default_registry(config, memory, language_module=None, logger=None)`
+  in `commands/registry.py` is the single place that wires concrete commands
+  together, including the optional local-language fallback; it passes its
+  `logger` into every command it builds.
+- `DiagnosticsCommand` (`diagnostics` / `status` triggers) re-reports, on
+  demand, everything already tracked about this session's health:
+  `Config.load_warnings`, `MemoryManager.load_warnings()`, and whether
+  `Logger` had to disable file logging after a write failure (config asks
+  for it but the logger turned itself off). First concrete step toward
+  roadmap v0.1.8 "Observability" — no new tracking, just a way to ask
+  after the startup log has scrolled away.
+- `FactCommand` won't learn a blank key or value (`my nickname is  ?`
+  falls through instead of storing an empty fact), and the query path
+  checks `is not None` so a hand-edited falsy value (e.g. `0`) is
+  reported the same way `facts` lists it.
 - `GreetingCommand` personalizes `hi`/`hello`/`hey` with the known `name`
   fact when one has been learned (e.g. "Hello, Erik!"); `Brain.start()`'s
   own greeting log line does the same.
@@ -132,10 +157,20 @@ ASTRA/
 
 ### Config
 - Loads settings from `config.json` in the project root.
-- Missing file, missing keys, malformed JSON, or syntactically-valid
-  JSON that isn't an object (e.g. `null`, a bare number, a list) all
-  fall back to `DEFAULTS` in code (a corrupt/hand-edited `config.json`
-  no longer crashes startup — it's treated the same as a missing file).
+- Missing file, missing keys, malformed JSON, non-UTF-8 encoding (e.g. a
+  config.json saved as UTF-16 by PowerShell's `Out-File`), or
+  syntactically-valid JSON that isn't an object (e.g. `null`, a bare
+  number, a list) all fall back to `DEFAULTS` in code (a corrupt/
+  hand-edited `config.json` no longer crashes startup — it's treated the
+  same as a missing file).
+- Loaded values are type-checked against their `DEFAULTS` entry
+  (`_validated()`): booleans must be real JSON booleans (a hand-edited
+  `"use_language_fallback": "false"` string can't silently flip the flag
+  on), numbers must be numeric (bools excluded), strings must be strings;
+  a mismatch keeps the default and records a load warning. `log_level` is
+  additionally value-checked: casing is normalized (`"debug"` → `"DEBUG"`)
+  and an unknown level falls back to `INFO` with a warning instead of
+  Logger's silent coercion.
 - File path is injectable for testing.
 - `version` is the one exception: it's not in `DEFAULTS` — `config.json`
   is the sole runtime source of truth, falling back to an honest
@@ -172,6 +207,14 @@ ASTRA/
   optional subsystem: it wraps a local `OllamaClient`, preflights model
   availability on `start()`, tracks an `available` flag, and safely degrades
   back to the old echo behavior if startup or generation fails.
+- `Modules`' error handlers use `getattr(module, "name",
+  type(module).__name__)` so a malformed module object without a `name`
+  can't crash the handler itself.
+- `OllamaClient` strips a reasoning model's `<think>` markup only at the
+  *leading* position of the response (where reasoning models emit it) —
+  a literal `<think>`/`</think>` later in a real answer is kept as
+  content. A lone leading `</think>` (template-swallowed opener) is
+  stripped only when no `<think>` appeared anywhere in the raw response.
 
 ### Memory
 - MemoryManager routes to ShortMemory (session), LongMemory (persistent
@@ -198,7 +241,9 @@ ASTRA/
 - `LongMemory.save()`/`Facts.save()` write atomically (temp file +
   `os.replace`) and `load()` falls back to empty state instead of
   crashing on truncated/corrupt JSON — a mid-write crash or hand-edited
-  bad file no longer permanently bricks startup.
+  bad file no longer permanently bricks startup. The temp file name
+  embeds the PID (`facts.json.<pid>.tmp`) so two Astra processes saving
+  at overlapping times can't interleave writes into the same temp file.
 - `LongMemory.search()`/`forget()` and `MemoryCommand`'s formatting/stats
   helpers all use `.get(...)` with fallbacks for an entry's `"entry"`/
   `"timestamp"` keys, not just `"type"` — a hand-edited or
@@ -211,9 +256,11 @@ ASTRA/
   indistinguishable from a genuinely empty first run — now it isn't.
 
 ### Export
-- `ExportCommand` (`export` trigger) bundles `Config`'s settings
-  (`name`/`version`/`log_level`/`log_to_file`/`check_for_updates`), all
-  facts, and the full `LongMemory` into one JSON file written to
+- `ExportCommand` (`export` trigger) bundles `Config`'s settings (every
+  key: `name`/`version`/`log_level`/`log_to_file`/`check_for_updates`/
+  `use_language_fallback`/`language_base_url`/`language_model`/
+  `language_generate_timeout`), all facts, and the full `LongMemory` into
+  one JSON file written to
   `data/exports/astra_export_<timestamp>.json` (microsecond-precision
   filename so two exports in the same second never overwrite each other).
 - Safe half of roadmap v0.1.3 ("Backup/restore") — a manual snapshot
@@ -235,6 +282,10 @@ ASTRA/
   `logs`, since the file path is the thing that's broken) and
   `log_to_file` is disabled for the rest of the session so the failure
   doesn't repeat on every subsequent call.
+- Every console print (the normal path *and* the file-failure warning)
+  goes through one `_print()` helper that falls back to ASCII on a
+  `UnicodeEncodeError`, so an unprintable character can't crash the
+  logger from either path.
 - Convenience methods: `debug()`, `info()`, `warning()`, `error()`.
 - Optional file output to `data/astra.log` (path injectable for testing),
   controlled by `config.json`'s `log_level` and `log_to_file` keys.
@@ -268,6 +319,8 @@ ASTRA/
   when `false`, `main.py` never constructs an `UpdateChecker` and no
   network call happens at all.
 - `fetch` is injectable so tests never touch the real network.
+- Version tuples are zero-padded to the same length before comparing, so
+  `"1.2"` vs `"1.2.0"` counts as up to date instead of a spurious update.
 
 ### Packaging
 - `pyproject.toml` (setuptools backend) declares the `astra` package and an
@@ -284,15 +337,19 @@ ASTRA/
   discover them as regular packages.
 
 ### Tests
-- pytest suite (187 tests) in `tests/`, configured by `pytest.ini`.
-- Covers lifecycle transitions, commands, facts, notes, memory search/
-  forget/stats, export, preference-backed output length, modules, local
-  Ollama fallback, session summary, startup briefing, memory persistence
-  (including corrupt-file fallback and entries missing keys), config
-  loading (including malformed-JSON and wrong-shape-JSON fallback), and
-  that every fallback above is actually logged, not just survived
-  (`load_warnings` reaching a `WARNING` log line, not merely "didn't
-  raise").
+- pytest suite (246 tests) in `tests/`, configured by `pytest.ini`.
+- Covers lifecycle transitions (including mid-transition crash recovery),
+  commands, facts, notes, memory search/forget/stats, export,
+  preference-backed output length, modules, local Ollama fallback
+  (including think-strip anchoring), session summary, startup briefing,
+  diagnostics/status, memory persistence (including corrupt-file fallback,
+  entries missing keys, and PID-unique temp paths), config loading
+  (including malformed-JSON, wrong-shape-JSON, non-UTF-8, and
+  wrong-type-value fallback), and that every fallback above is actually
+  logged, not just survived (`load_warnings` reaching a `WARNING` log
+  line, not merely "didn't raise").
+- No test touches the real network or the real `data/` directory — all
+  paths and fetchers are injected.
 - Run with: `python -m pytest`
 
 ### Continuous Integration
@@ -310,9 +367,11 @@ main.py only:
 - creates Brain and calls brain.start()
 - loops `while brain.is_running`
 - catches both `KeyboardInterrupt` (Ctrl+C) and `EOFError` (closed/piped
-  stdin) around the input loop, routing either through `brain.stop()` for
-  the same graceful shutdown — a closed pipe no longer skips module
-  shutdown and the session summary the way Ctrl+C already didn't.
+  stdin) around `brain.start()` *and* the input loop — a Ctrl+C during
+  startup (e.g. mid update-check) exits cleanly instead of dumping a raw
+  traceback, and `brain.stop()` is only called when the brain actually
+  reached RUNNING; either interrupt during the loop still routes through
+  `brain.stop()` for the same graceful shutdown.
 
 Brain controls startup and shutdown internally.
 
