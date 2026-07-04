@@ -32,8 +32,8 @@ class Config:
         if not settings.get("version"):
             self.load_warnings.append(
                 f'{self.path.name} has no "version" value; Astra can\'t tell '
-                f"whether it's up to date until it's set (the update check "
-                f"still reports the latest available version)."
+                f"whether it's up to date until it's set (if update checks "
+                f"are enabled, they still report the latest available version)."
             )
         self.log_level = self._validated_log_level(settings["log_level"])
         self.log_to_file = settings["log_to_file"]
