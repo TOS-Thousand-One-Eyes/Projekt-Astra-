@@ -342,3 +342,26 @@ def test_save_leaves_no_tmp_files_behind(tmp_path):
 
     leftovers = [item.name for item in tmp_path.iterdir() if ".tmp" in item.name]
     assert leftovers == []
+
+
+def test_facts_load_normalizes_hand_edited_keys(tmp_path):
+    import json
+
+    path = tmp_path / "facts.json"
+    path.write_text(json.dumps({"Name": "Erik"}), encoding="utf-8")
+    facts = Facts(path)
+
+    assert facts.get("name") == "Erik"
+    assert facts.load_warning is not None
+    assert "Name" in facts.load_warning
+
+
+def test_facts_load_with_already_normalized_keys_sets_no_warning(tmp_path):
+    import json
+
+    path = tmp_path / "facts.json"
+    path.write_text(json.dumps({"name": "Erik"}), encoding="utf-8")
+    facts = Facts(path)
+
+    assert facts.get("name") == "Erik"
+    assert facts.load_warning is None

@@ -48,4 +48,23 @@ class Facts:
             self.facts = {}
             self.load_warning = f"{self.path.name} does not contain a JSON object; starting with empty facts."
             return
-        self.facts = loaded
+        self.facts = self._normalized_keys(loaded)
+
+    def _normalized_keys(self, loaded):
+        # learn() stores keys stripped and lowercased and get() looks them up
+        # the same way - a hand-edited key like "Name" would be listed by the
+        # facts summary but unreachable by every lookup. Normalize on load,
+        # and say so, since it changes what the user wrote.
+        normalized = {}
+        renamed = []
+        for key, value in loaded.items():
+            clean = key.strip().lower()
+            if clean != key:
+                renamed.append(key)
+            normalized[clean] = value
+        if renamed:
+            self.load_warning = (
+                f"{self.path.name} had keys in a different form than Astra stores them "
+                f"({', '.join(repr(key) for key in renamed)}); normalized them on load so lookups find them."
+            )
+        return normalized
