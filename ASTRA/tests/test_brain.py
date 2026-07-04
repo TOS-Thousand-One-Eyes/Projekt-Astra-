@@ -771,3 +771,28 @@ class TestChatVisibility:
         brain.receive("status")
 
         assert any("needs attention" in entry or "no warnings" in entry for entry in brain.logger.get_logs())
+
+
+class TestPersistenceFailure:
+
+    def test_receive_survives_a_long_memory_save_failure(self, running_brain, memory, monkeypatch):
+        def failing_save():
+            raise OSError("disk full")
+
+        monkeypatch.setattr(memory.long_memory, "save", failing_save)
+
+        response = running_brain.receive("hi")
+
+        assert response == "Hello!"
+        assert running_brain.state == Brain.RUNNING
+
+    def test_long_memory_save_failure_is_logged_as_an_error(self, running_brain, memory, monkeypatch):
+        def failing_save():
+            raise OSError("disk full")
+
+        monkeypatch.setattr(memory.long_memory, "save", failing_save)
+
+        running_brain.receive("hi")
+
+        logs = running_brain.logger.get_logs()
+        assert any("ERROR" in entry and "long-term memory" in entry and "disk full" in entry for entry in logs)

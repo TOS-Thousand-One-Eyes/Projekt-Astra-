@@ -93,8 +93,14 @@ class Brain:
             return f"{self.config.name} is not running."
 
         result = self.commands.dispatch(message)
-        self.memory.remember(message)
-        self.memory.remember(result.response)
+        try:
+            self.memory.remember(message)
+            self.memory.remember(result.response)
+        except OSError as error:
+            self.logger.error(
+                f"Failed to save this exchange to long-term memory ({error}); "
+                f"the conversation continues, but it may not persist."
+            )
         self._message_count += 2
         self.logger.chat(f"{self.config.name}: {result.response}")
 
