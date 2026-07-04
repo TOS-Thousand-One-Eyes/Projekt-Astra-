@@ -59,14 +59,22 @@ class Facts:
         # and say so, since it changes what the user wrote.
         normalized = {}
         renamed = []
+        overwritten = []
         for key, value in loaded.items():
             clean = key.strip().lower()
             if clean != key:
                 renamed.append(key)
+            if clean in normalized:
+                overwritten.append(clean)
             normalized[clean] = value
         if renamed:
             self.load_warning = (
                 f"{self.path.name} had keys in a different form than Astra stores them "
                 f"({', '.join(repr(key) for key in renamed)}); normalized them on load so lookups find them."
             )
+            if overwritten:
+                self.load_warning += (
+                    f" Two keys normalized to the same name "
+                    f"({', '.join(repr(key) for key in overwritten)}); the value later in the file won."
+                )
         return normalized

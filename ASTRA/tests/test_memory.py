@@ -412,3 +412,13 @@ def test_long_memory_utf16_file_falls_back_to_empty_with_a_warning(tmp_path):
 
     assert memory.recall() == []
     assert memory.load_warning is not None
+
+
+def test_facts_load_warning_discloses_key_collisions(tmp_path):
+    path = tmp_path / "facts.json"
+    path.write_text('{"Name": "A", "name": "B"}', encoding="utf-8")
+    facts = Facts(path)
+
+    assert facts.get("name") == "B"
+    assert facts.load_warning is not None
+    assert "same name" in facts.load_warning
