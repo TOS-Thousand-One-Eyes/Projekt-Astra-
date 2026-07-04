@@ -828,3 +828,17 @@ class TestPersistenceFailure:
 
         logs = running_brain.logger.get_logs()
         assert any("ERROR" in entry and "long-term memory" in entry and "disk full" in entry for entry in logs)
+
+
+class TestLastSeenTimezone:
+
+    def test_startup_survives_a_timezone_aware_last_entry_timestamp(self, config, memory):
+        memory.long_memory.entries.append(
+            {"timestamp": "2026-01-01T00:00:00+00:00", "entry": "hi", "type": "chat"}
+        )
+        brain = Brain(Logger(), config, memory, Modules(Logger()))
+
+        brain.start()
+
+        assert brain.state == Brain.RUNNING
+        assert any("Last seen" in entry for entry in brain.logger.get_logs())

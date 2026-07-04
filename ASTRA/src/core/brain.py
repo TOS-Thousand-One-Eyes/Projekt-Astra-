@@ -127,6 +127,10 @@ class Brain:
                 f"({raw_timestamp!r}); skipping the last-seen line."
             )
             return
+        if last_timestamp.tzinfo is not None:
+            # Astra writes naive local timestamps; a hand-edited aware one
+            # would make the subtraction below raise (naive minus aware).
+            last_timestamp = last_timestamp.astimezone().replace(tzinfo=None)
         ago = format_duration(self._session_started_at - last_timestamp)
         self.logger.log(f"Last seen {ago} ago.")
 
