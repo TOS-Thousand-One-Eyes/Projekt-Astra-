@@ -192,3 +192,17 @@ def test_print_failure_falls_back_to_ascii_instead_of_crashing(monkeypatch):
 
     assert len(calls) == 2
     assert any("hello" in entry for entry in logger.get_logs())
+
+
+def test_file_write_survives_a_non_encodable_character(tmp_path):
+    # A lone surrogate (e.g. from a model response that json parsed happily)
+    # is not encodable to UTF-8; the file write must not crash or kill
+    # file logging - it lands in the file escaped instead.
+    path = tmp_path / "astra.log"
+    logger = Logger(log_to_file=True, log_path=path)
+
+    logger.log("reply: hi \ud83d there")
+
+    assert logger.log_to_file is True
+    content = path.read_text(encoding="utf-8")
+    assert "reply: hi" in content

@@ -25,7 +25,10 @@ class Logger:
         if self.log_to_file:
             try:
                 self.log_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(self.log_path, "a", encoding="utf-8") as f:
+                # backslashreplace: a non-encodable character (e.g. a lone
+                # surrogate from a model response) is written escaped instead
+                # of raising UnicodeEncodeError, which except OSError misses.
+                with open(self.log_path, "a", encoding="utf-8", errors="backslashreplace") as f:
                     f.write(entry + "\n")
             except OSError as error:
                 self.log_to_file = False
