@@ -33,11 +33,12 @@ class FactCommand(Command):
         query_match = self.QUERY_PATTERN.match(stripped)
         if query_match:
             key = query_match.group(1).strip()
-            value = self.memory.get_fact(key)
-            # "is not None", not truthiness: a hand-edited falsy value like 0
-            # is still a known fact ("facts" lists it, so the query must too).
-            if value is not None:
-                return f"Your {key} is {value}."
+            # Membership, not a value check: any stored fact - even a
+            # hand-edited 0 or null - is known ("facts" lists it, so the
+            # query must agree).
+            facts = self.memory.all_facts()
+            if key.lower() in facts:
+                return f"Your {key} is {facts[key.lower()]}."
             return f"I don't know your {key} yet. Tell me with: my {key} is ..."
 
         if normalized in self.SUMMARY_TRIGGERS:

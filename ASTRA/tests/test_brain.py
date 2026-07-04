@@ -388,6 +388,10 @@ class TestFacts:
         memory.facts.facts["age"] = 0
         assert running_brain.receive("what is my age?") == "Your age is 0."
 
+    def test_null_fact_value_is_still_reported_as_known(self, running_brain, memory):
+        memory.facts.facts["name"] = None
+        assert running_brain.receive("what is my name?") == "Your name is None."
+
 
 class TestPersonalization:
 
