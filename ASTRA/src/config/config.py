@@ -80,7 +80,9 @@ class Config:
         if not self.path.exists():
             return {}
         try:
-            with open(self.path, "r", encoding="utf-8") as f:
+            # utf-8-sig: tolerate the BOM PowerShell's Out-File -Encoding utf8
+            # prepends, which plain utf-8 rejects as invalid JSON.
+            with open(self.path, "r", encoding="utf-8-sig") as f:
                 loaded = json.load(f)
         except json.JSONDecodeError as error:
             self.load_warnings.append(f"{self.path.name} is not valid JSON ({error}); using defaults.")

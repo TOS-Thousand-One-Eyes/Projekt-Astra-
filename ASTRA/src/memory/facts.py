@@ -38,7 +38,9 @@ class Facts:
             self.facts = {}
             return
         try:
-            with open(self.path, "r", encoding="utf-8") as f:
+            # utf-8-sig: a hand-edited file saved with a BOM must not reset
+            # the user's facts to empty.
+            with open(self.path, "r", encoding="utf-8-sig") as f:
                 loaded = json.load(f)
         except (json.JSONDecodeError, OSError) as error:
             self.facts = {}

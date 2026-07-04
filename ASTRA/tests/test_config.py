@@ -210,3 +210,11 @@ def test_unknown_log_level_falls_back_to_info_with_a_warning(tmp_path):
     config = Config(path=path)
     assert config.log_level == "INFO"
     assert any("log_level" in warning for warning in config.load_warnings)
+
+
+def test_utf8_bom_config_file_loads_normally(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_bytes(b"\xef\xbb\xbf" + json.dumps({"name": "TestBot", "version": "1.0.0"}).encode("utf-8"))
+    config = Config(path=path)
+    assert config.name == "TestBot"
+    assert config.load_warnings == []

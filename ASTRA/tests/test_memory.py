@@ -365,3 +365,26 @@ def test_facts_load_with_already_normalized_keys_sets_no_warning(tmp_path):
 
     assert facts.get("name") == "Erik"
     assert facts.load_warning is None
+
+
+def test_facts_load_tolerates_a_utf8_bom(tmp_path):
+    import json
+
+    path = tmp_path / "facts.json"
+    path.write_bytes(b"\xef\xbb\xbf" + json.dumps({"name": "Erik"}).encode("utf-8"))
+    facts = Facts(path)
+
+    assert facts.get("name") == "Erik"
+    assert facts.load_warning is None
+
+
+def test_long_memory_load_tolerates_a_utf8_bom(tmp_path):
+    import json
+
+    path = tmp_path / "long_memory.json"
+    entries = [{"timestamp": "2026-01-01T00:00:00", "entry": "hi", "type": "chat"}]
+    path.write_bytes(b"\xef\xbb\xbf" + json.dumps(entries).encode("utf-8"))
+    memory = LongMemory(path)
+
+    assert len(memory.recall()) == 1
+    assert memory.load_warning is None
