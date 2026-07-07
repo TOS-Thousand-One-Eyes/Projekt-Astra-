@@ -6,6 +6,7 @@ from modules.modules import Modules
 from utils.logger import Logger
 from utils.ollama_client import OllamaClient
 from utils.update_checker import UpdateChecker
+from vision.semantic_vision import LocalVisionDescriber
 
 
 def main():
@@ -22,9 +23,25 @@ def main():
         )
         modules.add_module(LanguageModule(language_client, logger))
 
+    vision_describer = None
+    if config.use_vision_model:
+        vision_client = OllamaClient(
+            config.vision_base_url,
+            config.vision_model,
+            generate_timeout=config.vision_generate_timeout,
+        )
+        vision_describer = LocalVisionDescriber(client=vision_client, source="vision")
+
     update_checker = UpdateChecker(config.version, logger) if config.check_for_updates else None
 
-    brain = Brain(logger, config, memory, modules, update_checker=update_checker)
+    brain = Brain(
+        logger,
+        config,
+        memory,
+        modules,
+        update_checker=update_checker,
+        vision_describer=vision_describer,
+    )
 
     try:
         brain.start()

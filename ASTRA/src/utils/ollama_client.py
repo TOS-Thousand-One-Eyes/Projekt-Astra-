@@ -1,6 +1,8 @@
+import base64
 import json
 import re
 import urllib.request
+from pathlib import Path
 
 # Reasoning models emit their <think> block at the start of the response
 # (or, when the prompt template swallows the opening tag, as bare reasoning
@@ -42,6 +44,31 @@ class OllamaClient:
         if self.model not in names:
             raise ValueError(f"Ollama model '{self.model}' is not available.")
 
+    def list_models(self):
+        payload = self.request_json(f"{self.base_url}/api/tags", timeout=self.health_timeout)
+        models = payload.get("models")
+        if not isinstance(models, list):
+            raise ValueError("Ollama returned an invalid model list.")
+
+        results = []
+        for item in models:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("model") or item.get("name")
+            if not isinstance(name, str) or not name.strip():
+                continue
+            details = item.get("details") if isinstance(item.get("details"), dict) else {}
+            capabilities = item.get("capabilities") if isinstance(item.get("capabilities"), list) else []
+            results.append(
+                {
+                    "name": name,
+                    "size": item.get("size"),
+                    "parameter_size": details.get("parameter_size"),
+                    "capabilities": [str(capability) for capability in capabilities],
+                }
+            )
+        return sorted(results, key=lambda model: model["name"].lower())
+
     def generate(self, prompt):
         payload = self.request_json(
             f"{self.base_url}/api/generate",
@@ -49,6 +76,30 @@ class OllamaClient:
             data={
                 "model": self.model,
                 "prompt": prompt,
+                "stream": False,
+            },
+            timeout=self.generate_timeout,
+        )
+        response = payload.get("response")
+        if not isinstance(response, str):
+            raise ValueError("Ollama returned an invalid response.")
+
+        cleaned = self._strip_reasoning(response)
+        if not cleaned:
+            raise ValueError("Ollama returned an empty response.")
+        return cleaned
+
+    def generate_with_images(self, prompt, image_paths):
+        images = [encode_image(path) for path in image_paths]
+        if not images:
+            raise ValueError("At least one image is required.")
+        payload = self.request_json(
+            f"{self.base_url}/api/generate",
+            method="POST",
+            data={
+                "model": self.model,
+                "prompt": prompt,
+                "images": images,
                 "stream": False,
             },
             timeout=self.generate_timeout,
@@ -89,3 +140,12 @@ class OllamaClient:
         request = urllib.request.Request(url, data=payload, headers=headers, method=method)
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.load(response)
+
+
+def encode_image(path):
+    image_path = Path(str(path).strip().strip('"'))
+    if not image_path.exists():
+        raise FileNotFoundError(f"Image not found: {path}")
+    if not image_path.is_file():
+        raise ValueError(f"Image path is not a file: {path}")
+    return base64.b64encode(image_path.read_bytes()).decode("ascii")

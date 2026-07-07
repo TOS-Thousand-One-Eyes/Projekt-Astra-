@@ -29,6 +29,21 @@ class FailingCommand:
         raise RuntimeError("command boom")
 
 
+class StubVisionClient:
+    model = "llava:test"
+
+    def ensure_available(self):
+        return None
+
+    def generate_with_images(self, prompt, image_paths):
+        return "image description"
+
+
+class StubVisionDescriber:
+    def __init__(self):
+        self.client = StubVisionClient()
+
+
 class TestLifecycle:
 
     def test_brain_starts_offline(self, brain):
@@ -67,6 +82,19 @@ class TestLifecycle:
         empty_registry = CommandRegistry([])
         brain = Brain(Logger(), config, memory, Modules(Logger()), commands=empty_registry)
         assert brain.commands is empty_registry
+
+    def test_vision_describer_is_passed_to_default_registry(self, config, memory):
+        brain = Brain(
+            Logger(),
+            config,
+            memory,
+            Modules(Logger()),
+            vision_describer=StubVisionDescriber(),
+        )
+
+        response = brain.process("jarvis verify")
+
+        assert "vision model runtime is available model=llava:test" in response
 
 
 class TestLifecycleRecovery:
@@ -215,6 +243,14 @@ class TestCommands:
     def test_greeting(self, running_brain):
         assert running_brain.receive("hi") == "Hello!"
 
+    def test_help_shortcut_h_works(self, running_brain):
+        response = running_brain.receive("h")
+        assert "Here's what I can do" in response
+
+    def test_help_shortcut_question_mark_works(self, running_brain):
+        response = running_brain.receive("?")
+        assert "Here's what I can do" in response
+
     def test_greeting_ignores_case_and_punctuation(self, running_brain):
         assert running_brain.receive("  Hello!  ") == "Hi there!"
 
@@ -223,6 +259,26 @@ class TestCommands:
 
     def test_farewell_stops_the_brain_with_a_space_before_the_punctuation(self, running_brain):
         response = running_brain.receive("bye !")
+        assert "Goodbye" in response
+        assert running_brain.state == Brain.OFFLINE
+
+    def test_ctrl_d_trigger_stops_the_brain(self, running_brain):
+        response = running_brain.receive("ctrl+d")
+        assert "Goodbye" in response
+        assert running_brain.state == Brain.OFFLINE
+
+    def test_ctrl_d_shortcut_variants_stop_the_brain(self, running_brain):
+        response = running_brain.receive("^d")
+        assert "Goodbye" in response
+        assert running_brain.state == Brain.OFFLINE
+
+    def test_q_shortcut_stops_the_brain(self, running_brain):
+        response = running_brain.receive("q")
+        assert "Goodbye" in response
+        assert running_brain.state == Brain.OFFLINE
+
+    def test_colon_q_shortcut_stops_the_brain(self, running_brain):
+        response = running_brain.receive(":q")
         assert "Goodbye" in response
         assert running_brain.state == Brain.OFFLINE
 
@@ -252,6 +308,30 @@ class TestCommands:
         brain.start()
 
         assert brain.receive("something random") == "Local reply: something random"
+
+    def test_language_module_receives_memory_context_when_available(self, config, memory):
+        prompts = []
+
+        class StubClient:
+            def ensure_available(self):
+                return None
+
+            def generate(self, prompt):
+                prompts.append(prompt)
+                return "context-aware reply"
+
+        memory.learn("name", "Erik")
+        memory.remember("Learned subject: line balancing. Summary: use takt time.", entry_type="learned")
+        modules = Modules(Logger())
+        modules.add_module(LanguageModule(StubClient()))
+        brain = Brain(Logger(), config, memory, modules)
+        brain.start()
+
+        assert brain.receive("How should I think about line balancing?") == "context-aware reply"
+        assert "Memory context:" in prompts[0]
+        assert "[fact:name] name: Erik" in prompts[0]
+        assert "Learned subject: line balancing" in prompts[0]
+        assert "User message: How should I think about line balancing?" in prompts[0]
 
     def test_unknown_message_falls_back_to_echo_when_language_module_runtime_fails(self, config, memory):
         class StubClient:

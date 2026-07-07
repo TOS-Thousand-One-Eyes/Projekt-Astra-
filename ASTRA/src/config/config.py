@@ -17,6 +17,10 @@ DEFAULTS = {
     "language_base_url": "http://localhost:11434",
     "language_model": "qwen3:4b",
     "language_generate_timeout": 240,
+    "use_vision_model": False,
+    "vision_base_url": "http://localhost:11434",
+    "vision_model": "llava:latest",
+    "vision_generate_timeout": 240,
 }
 
 
@@ -42,6 +46,10 @@ class Config:
         self.language_base_url = settings["language_base_url"]
         self.language_model = settings["language_model"]
         self.language_generate_timeout = settings["language_generate_timeout"]
+        self.use_vision_model = settings["use_vision_model"]
+        self.vision_base_url = settings["vision_base_url"]
+        self.vision_model = settings["vision_model"]
+        self.vision_generate_timeout = settings["vision_generate_timeout"]
 
     def _validated_log_level(self, value):
         # Logger would silently coerce an unknown level to INFO; catch it

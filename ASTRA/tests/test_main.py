@@ -83,3 +83,42 @@ class TestEOFError:
         main_module.main()
 
         assert any("stopped" in entry for entry in logger.get_logs())
+
+
+class TestVisionRuntimeWiring:
+
+    def test_configured_vision_model_is_passed_to_brain(self, monkeypatch, tmp_path):
+        config_path = tmp_path / "config.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "version": "0.0.0",
+                    "check_for_updates": False,
+                    "use_vision_model": True,
+                    "vision_base_url": "http://127.0.0.1:11435",
+                    "vision_model": "llava:test",
+                    "vision_generate_timeout": 12,
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(main_module, "Config", lambda: Config(path=config_path))
+        monkeypatch.setattr(main_module, "MemoryManager", lambda: MemoryManager(data_dir=tmp_path))
+        captured = {}
+        original_init = main_module.Brain.__init__
+
+        def spy_init(self, logger, config, memory, modules, **kwargs):
+            captured["vision_describer"] = kwargs.get("vision_describer")
+            return original_init(self, logger, config, memory, modules, **kwargs)
+
+        monkeypatch.setattr(main_module.Brain, "__init__", spy_init)
+        inputs = iter(["bye"])
+        monkeypatch.setattr(builtins, "input", lambda prompt="": next(inputs))
+
+        main_module.main()
+
+        describer = captured["vision_describer"]
+        assert describer is not None
+        assert describer.client.base_url == "http://127.0.0.1:11435"
+        assert describer.client.model == "llava:test"
+        assert describer.client.generate_timeout == 12

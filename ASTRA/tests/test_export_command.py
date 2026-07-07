@@ -27,6 +27,10 @@ def test_export_creates_file_with_expected_keys_and_values(config, memory, tmp_p
         "language_base_url": config.language_base_url,
         "language_model": config.language_model,
         "language_generate_timeout": config.language_generate_timeout,
+        "use_vision_model": config.use_vision_model,
+        "vision_base_url": config.vision_base_url,
+        "vision_model": config.vision_model,
+        "vision_generate_timeout": config.vision_generate_timeout,
     }
     assert data["facts"] == {"name": "Erik"}
     assert data["long_memory"][0]["entry"] == "buy milk"

@@ -18,15 +18,35 @@ class Command:
 
 class DispatchResult:
 
-    def __init__(self, response, stops_brain=False):
+    def __init__(self, response, stops_brain=False, command_name=None):
         self.response = response
         self.stops_brain = stops_brain
+        self.command_name = command_name
 
 
 def normalize(message):
+    raw = message.strip().lower()
+    if raw == "?":
+        return "help"
+
     # Strip whitespace along with the punctuation: "bye !" must normalize
     # to "bye", not "bye ", or every exact-trigger match misses it.
-    return message.strip().lower().rstrip("?!. \t\r\n")
+    normalized = raw.rstrip("?!. \t\r\n")
+    return expand_shortcut(normalized)
+
+
+def expand_shortcut(normalized):
+    exact = {
+        "h": "help",
+        "q": "quit",
+        ":q": "quit",
+        ":wq": "quit",
+        "ctrl d": "ctrl+d",
+        "control d": "ctrl+d",
+        "control+d": "ctrl+d",
+        "^d": "ctrl+d",
+    }
+    return exact.get(normalized, normalized)
 
 
 def looks_like_shell_command(message):

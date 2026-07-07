@@ -4,7 +4,7 @@ from commands.base import Command
 class HelpCommand(Command):
 
     TRIGGERS = ("help", "commands", "what can you do")
-    help_text = "- help - show this message"
+    help_text = "- help / h / ? - show this message"
 
     def __init__(self, other_commands, logger=None):
         super().__init__(logger)

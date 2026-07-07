@@ -6,6 +6,10 @@
   "check_for_updates": true,
   "use_language_fallback": true,
   "language_base_url": "http://localhost:11434",
-  "language_model": "llama3.2:1b",
-  "language_generate_timeout": 240
+  "language_model": "llama3.2:3b",
+  "language_generate_timeout": 240,
+  "use_vision_model": false,
+  "vision_base_url": "http://localhost:11434",
+  "vision_model": "llava:latest",
+  "vision_generate_timeout": 240
 }

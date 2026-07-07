@@ -18,5 +18,5 @@ astra = "main:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
-packages = ["commands", "config", "core", "memory", "modules", "utils"]
+packages = ["actions", "automation", "commands", "config", "core", "dev", "experience", "learning", "memory", "modules", "research", "speech", "utils", "vision"]
 py-modules = ["main"]

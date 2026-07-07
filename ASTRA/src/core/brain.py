@@ -1,6 +1,8 @@
 from datetime import datetime
 
 from commands.registry import build_default_registry
+from experience.experience_manager import ExperienceManager
+from experience.reflection_manager import ReflectionManager
 from utils.time_format import format_duration
 
 
@@ -18,20 +20,51 @@ class Brain:
         STOPPING: (OFFLINE,),
     }
 
-    def __init__(self, logger, config, memory, modules, commands=None, update_checker=None):
+    def __init__(
+        self,
+        logger,
+        config,
+        memory,
+        modules,
+        commands=None,
+        update_checker=None,
+        learning=None,
+        actions=None,
+        speech=None,
+        vision=None,
+        vision_describer=None,
+        code=None,
+        reminders=None,
+        system_actions=None,
+        experience=None,
+        reflections=None,
+    ):
         self.state = self.OFFLINE
         self.logger = logger
         self.config = config
         self.memory = memory
         self.modules = modules
+        self.experience = experience or ExperienceManager()
+        self.reflections = reflections or ReflectionManager()
         self.commands = commands if commands is not None else build_default_registry(
             config,
             memory,
             language_module=self._language_module(),
+            learning=learning,
+            actions=actions,
+            speech=speech,
+            vision=vision,
+            vision_describer=vision_describer,
+            code=code,
+            reminders=reminders,
+            system_actions=system_actions,
+            experience=self.experience,
+            reflections=self.reflections,
             logger=logger,
         )
         self.update_checker = update_checker
         self._session_started_at = None
+        self._session_id = None
         self._facts_at_start = 0
         self._message_count = 0
 
@@ -43,6 +76,7 @@ class Brain:
         self._set_state(self.STARTING)
         try:
             self._session_started_at = datetime.now()
+            self._session_id = self._session_started_at.strftime("SESSION-%Y%m%d-%H%M%S")
             self._facts_at_start = len(self.memory.all_facts())
             self._message_count = 0
             long_entries = self.memory.recall_long()
@@ -56,6 +90,10 @@ class Brain:
                 f"{self._facts_at_start} facts."
             )
             for warning in self.memory.load_warnings():
+                self.logger.warning(warning)
+            for warning in getattr(self.experience, "load_warnings", []):
+                self.logger.warning(warning)
+            for warning in getattr(self.reflections, "load_warnings", []):
                 self.logger.warning(warning)
             self.logger.log(f"Current time: {self._session_started_at.strftime('%Y-%m-%d %H:%M:%S')}.")
             self._log_last_seen(long_entries)
@@ -100,6 +138,18 @@ class Brain:
             self.logger.error(
                 f"Failed to save this exchange to long-term memory ({error}); "
                 f"the conversation continues, but it may not persist."
+            )
+        try:
+            self.experience.record_exchange(
+                message,
+                result.response,
+                command_name=result.command_name,
+                session_id=self._session_id,
+            )
+        except Exception as error:
+            self.logger.error(
+                f"Failed to save this exchange to structured experience memory ({error}); "
+                f"the conversation continues, but it may not be available for reflection."
             )
         self._message_count += 2
         self.logger.chat(f"{self.config.name}: {result.response}")

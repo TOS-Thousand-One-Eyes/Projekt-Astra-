@@ -3,8 +3,8 @@ from commands.base import Command
 
 class ExitCommand(Command):
 
-    TRIGGERS = ("bye", "goodbye", "exit", "quit")
-    help_text = "- bye / exit / quit - stop the conversation"
+    TRIGGERS = ("bye", "goodbye", "exit", "quit", "ctrl+d", "ctrl d", "control d")
+    help_text = "- bye / exit / quit / q / :q / ctrl+d - stop the conversation"
     stops_brain = True
 
     def __init__(self, config, logger=None):

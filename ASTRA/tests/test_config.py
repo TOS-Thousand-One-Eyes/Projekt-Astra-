@@ -98,6 +98,34 @@ def test_loads_language_fallback_settings_from_file(tmp_path):
     assert config.language_generate_timeout == 90
 
 
+def test_vision_model_defaults(tmp_path):
+    config = Config(path=tmp_path / "missing.json")
+    assert config.use_vision_model == DEFAULTS["use_vision_model"]
+    assert config.vision_base_url == DEFAULTS["vision_base_url"]
+    assert config.vision_model == DEFAULTS["vision_model"]
+    assert config.vision_generate_timeout == DEFAULTS["vision_generate_timeout"]
+
+
+def test_loads_vision_model_settings_from_file(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "use_vision_model": True,
+                "vision_base_url": "http://127.0.0.1:11435",
+                "vision_model": "llava:13b",
+                "vision_generate_timeout": 120,
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = Config(path=path)
+    assert config.use_vision_model is True
+    assert config.vision_base_url == "http://127.0.0.1:11435"
+    assert config.vision_model == "llava:13b"
+    assert config.vision_generate_timeout == 120
+
+
 def test_malformed_json_falls_back_to_defaults(tmp_path):
     path = tmp_path / "config.json"
     path.write_text("{not valid json", encoding="utf-8")
@@ -162,6 +190,14 @@ def test_non_numeric_timeout_keeps_the_default_and_warns(tmp_path):
     config = Config(path=path)
     assert config.language_generate_timeout == DEFAULTS["language_generate_timeout"]
     assert any("language_generate_timeout" in warning for warning in config.load_warnings)
+
+
+def test_non_numeric_vision_timeout_keeps_the_default_and_warns(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"vision_generate_timeout": "240"}), encoding="utf-8")
+    config = Config(path=path)
+    assert config.vision_generate_timeout == DEFAULTS["vision_generate_timeout"]
+    assert any("vision_generate_timeout" in warning for warning in config.load_warnings)
 
 
 def test_boolean_timeout_keeps_the_default_and_warns(tmp_path):

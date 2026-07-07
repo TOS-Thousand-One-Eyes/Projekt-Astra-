@@ -1,4 +1,5 @@
 from memory.facts import Facts
+from memory.context_builder import build_model_prompt
 from memory.long_memory import LongMemory
 from memory.memory_manager import MemoryManager
 from memory.short_memory import ShortMemory
@@ -300,6 +301,24 @@ def test_memory_manager_forget_with_no_matching_note_leaves_short_memory_untouch
     removed = memory.forget("test")
     assert removed == 0
     assert memory.recall() == ["test"]
+
+
+def test_model_prompt_returns_raw_message_without_context(memory):
+    assert build_model_prompt("what should I do?", memory) == "what should I do?"
+
+
+def test_model_prompt_includes_facts_notes_and_learned_memory(memory):
+    memory.learn("name", "Erik")
+    memory.remember("Compressor oil should be checked weekly.", entry_type="note")
+    memory.remember("Learned subject: compressor maintenance. Summary: check oil and vibration.", entry_type="learned")
+
+    prompt = build_model_prompt("What do you know about compressor oil?", memory)
+
+    assert "Memory context:" in prompt
+    assert "[fact:name] name: Erik" in prompt
+    assert "Compressor oil should be checked weekly." in prompt
+    assert "Learned subject: compressor maintenance" in prompt
+    assert "User message: What do you know about compressor oil?" in prompt
 
 
 def test_long_memory_save_uses_a_process_unique_tmp_path(tmp_path, monkeypatch):
