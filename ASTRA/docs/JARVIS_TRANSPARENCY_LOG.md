@@ -1123,3 +1123,61 @@ Validation:
     `ollama pull gemma3:1b`, and switch command `model use gemma3:1b`
 - Current `config.json` was intentionally left on installed model
   `llama3.2:3b` until the lighter model is actually installed locally.
+
+### Lightweight Tkinter GUI
+
+The user asked for a nicer visual experience without increasing HW load. ASTRA
+was still primarily a CLI application, so the GUI needed to reuse the existing
+Brain and command registry instead of introducing a second runtime.
+
+Implemented:
+
+- Added `src/gui/presenter.py`
+  - defines low-overhead quick commands for status, verification, Ollama
+    toggles, lightweight model recommendation, and help
+  - formats runtime/model state text without importing Tkinter
+- Added `src/gui/app.py`
+  - builds a desktop Tkinter window
+  - uses the same `Config`, `MemoryManager`, `Modules`, `Brain`,
+    `LanguageModule`, Ollama client, speech/vision command wiring, and
+    `config.json` behavior as the CLI
+  - shows a chat transcript, runtime status strip, quick action buttons,
+    message input, and `Restart Runtime`
+  - runs startup and command handling on worker threads so slow model calls do
+    not freeze the UI
+  - uses a GUI logger that routes ASTRA log/chat output into the window
+- Added `src/gui/__init__.py`
+- Added `run_astra_gui.bat`
+  - starts the GUI with project-local `src` on `PYTHONPATH`
+- Updated `pyproject.toml`
+  - adds package `gui`
+  - adds console script `astra-gui = "gui.app:main"`
+- Updated `README.md`
+  - documents the GUI startup commands and the low-HW design boundary
+- Added `tests/test_gui_presenter.py`
+  - covers runtime status summaries, quick command coverage, title formatting,
+    and the no-browser/no-extra-dependency design note
+
+Reason:
+
+- Tkinter is included with normal Python installs and avoids the cost of a
+  browser engine, Electron, local web server, or additional UI dependencies.
+- Keeping GUI commands routed through the existing Brain preserves behavior:
+  memory, learning, reminders, JARVIS audit, Ollama toggles, and model
+  recommendations remain one command surface.
+- `Restart Runtime` is needed because enabling Ollama from a session that
+  started with `use_language_fallback=false` persists config, but the language
+  module is only created during runtime startup.
+
+Validation:
+
+- Targeted GUI presenter tests:
+  - `6 passed`
+- GUI import smoke:
+  - `import tkinter; import gui.app` succeeded
+- Hidden Tk runtime smoke:
+  - created a withdrawn Tk root, started `AstraTkApp`, verified status
+    `Ollama off | llama3.2:3b is configured but not used`, then closed the
+    runtime cleanly
+- Full project test suite:
+  - `386 passed`

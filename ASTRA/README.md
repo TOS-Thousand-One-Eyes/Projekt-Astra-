@@ -23,6 +23,28 @@ pip install -e ".[dev]"
 astra
 ```
 
+## Lightweight GUI
+
+ASTRA also has a low-overhead desktop GUI:
+
+```
+astra-gui
+```
+
+or on Windows from the project folder:
+
+```
+run_astra_gui.bat
+```
+
+The GUI uses Python's built-in Tkinter toolkit, so it does not add a browser
+engine, Electron runtime, web server, or new package dependency. It reuses the
+same Brain, memory, commands, and `config.json` as the CLI. Quick actions expose
+runtime status, `jarvis verify`, Ollama on/off, the lower-HW model
+recommendation, and help. If Ollama is enabled from a GUI session that started
+without a language module, use `Restart Runtime` in the GUI so ASTRA reloads
+the updated config.
+
 ## Learning commands
 
 ASTRA now has a local-first learning workflow:

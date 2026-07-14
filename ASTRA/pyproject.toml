@@ -15,8 +15,9 @@ dev = ["pytest"]
 
 [project.scripts]
 astra = "main:main"
+astra-gui = "gui.app:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
-packages = ["actions", "automation", "commands", "config", "core", "dev", "experience", "learning", "memory", "modules", "research", "speech", "utils", "vision"]
+packages = ["actions", "automation", "commands", "config", "core", "dev", "experience", "gui", "learning", "memory", "modules", "research", "speech", "utils", "vision"]
 py-modules = ["main"]

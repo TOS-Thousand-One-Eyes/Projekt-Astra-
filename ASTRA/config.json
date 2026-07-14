@@ -4,7 +4,7 @@
   "log_level": "INFO",
   "log_to_file": false,
   "check_for_updates": true,
-  "use_language_fallback": true,
+  "use_language_fallback": false,
   "language_base_url": "http://localhost:11434",
   "language_model": "llama3.2:3b",
   "language_generate_timeout": 240,
