@@ -1070,3 +1070,56 @@ Validation so far:
   - `jarvis verify` reports `pass=9 warn=1 fail=0`
 - Full project test suite after local model runtime self-healing:
   - `368 passed`
+
+### Ollama Runtime Toggle And Lower-HW Model Recommendation
+
+The local language fallback could be inspected and switched between installed
+models, but it still required manual `config.json` edits to turn Ollama use on
+or off. The current configured model, `llama3.2:3b`, also remains the largest
+runtime cost on weak machines.
+
+Implemented:
+
+- Updated `src/commands/model_command.py`
+  - adds `model on` / `model enable`
+  - adds `model off` / `model disable`
+  - adds `ollama on` / `ollama enable`
+  - adds `ollama off` / `ollama disable`
+  - persists `use_language_fallback` changes to `config.json`
+  - stops the current session's language module when disabling Ollama fallback
+  - verifies the current language module when enabling fallback in a session
+  - asks for an ASTRA restart when enabling fallback but no language module was
+    created for the current session
+  - adds `model recommend-light`
+  - recommends `gemma3:1b` as the lower-HW text model candidate
+  - keeps `llama3.2:1b` visible as the same-family option, but notes that it is
+    not quite half the published size of `llama3.2:3b`
+- Updated `README.md`
+  - documents the new on/off commands and the lighter model workflow
+- Updated `tests/test_model_command.py`
+  - covers disabling fallback, enabling fallback, restart-required behavior,
+    and the lightweight recommendation text
+
+Reason:
+
+- The user should be able to turn local Ollama fallback on or off from ASTRA
+  chat instead of hand-editing JSON.
+- ASTRA should not switch `config.json` directly to a model that is not proven
+  installed locally. The safer flow is: show the recommendation, install it
+  outside ASTRA, then run `model use gemma3:1b`.
+- `gemma3:1b` is the practical lower-HW recommendation because the official
+  Ollama listing puts it below half the size of the currently configured
+  `llama3.2:3b` model. `llama3.2:1b` remains a conservative same-family
+  fallback if behavior compatibility matters more than hitting the 1/2 target.
+
+Validation:
+
+- Targeted model command tests:
+  - `13 passed`
+- Full project test suite after the runtime toggle and recommendation:
+  - `380 passed`
+- Live command smoke with current `config.json`:
+  - `model recommend-light` reports `gemma3:1b`, install command
+    `ollama pull gemma3:1b`, and switch command `model use gemma3:1b`
+- Current `config.json` was intentionally left on installed model
+  `llama3.2:3b` until the lighter model is actually installed locally.

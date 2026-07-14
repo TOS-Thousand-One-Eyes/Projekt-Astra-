@@ -75,18 +75,30 @@ ASTRA can explicitly inspect and verify the local language model runtime:
 ```
 model status
 model list
+model on
+model off
+ollama on
+ollama off
 model use <installed-model-name>
+model recommend-light
 model check
 model smoke
 model ask <prompt>
 ```
 
 `model status` reports the configured model state without making a network call.
-`model list` shows installed Ollama models, `model use <installed-model-name>`
-switches the runtime client and persists the chosen model to `config.json`,
+`model list` shows installed Ollama models. `model on` / `ollama on` enables
+the local Ollama fallback in `config.json`; `model off` / `ollama off` disables
+it and stops the current session from using the local model for unmatched chat.
+`model use <installed-model-name>`
+switches the runtime client, enables the fallback, and persists the chosen model to `config.json`,
 `model check` verifies the configured local model through the language module,
 `model smoke` asks for a minimal response, and `model ask <prompt>` sends a
 direct prompt to the local model after the same availability check.
+`model recommend-light` reports a lower-HW model candidate. The current light
+recommendation is `gemma3:1b`: it is a text model with an official Ollama size
+below half of the currently configured `llama3.2:3b` model. Install it outside
+ASTRA with `ollama pull gemma3:1b`, then switch with `model use gemma3:1b`.
 When the local language module handles normal chat fallback, ASTRA now builds a
 memory-aware prompt from relevant facts, notes, and promoted `learned` entries.
 If no useful context exists, the original message is sent unchanged.
