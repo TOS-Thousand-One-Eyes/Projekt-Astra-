@@ -4,13 +4,23 @@ from commands.base import Command
 class DiagnosticsCommand(Command):
 
     TRIGGERS = ("diagnostics", "status")
-
     help_text = "- diagnostics / status - check whether anything went wrong this session"
 
-    def __init__(self, config, memory, logger=None):
+    def __init__(
+        self,
+        config,
+        memory,
+        logger=None,
+        learning=None,
+        self_learning=None,
+        experience=None,
+    ):
         super().__init__(logger)
         self.config = config
         self.memory = memory
+        self.learning = learning
+        self.self_learning = self_learning
+        self.experience = experience
 
     def handle(self, message, normalized):
         if normalized not in self.TRIGGERS:
@@ -21,6 +31,13 @@ class DiagnosticsCommand(Command):
             problems.append(f"- config: {warning}")
         for warning in self.memory.load_warnings():
             problems.append(f"- memory: {warning}")
+        for label, manager in (
+            ("learning", self.learning),
+            ("self-learning", self.self_learning),
+            ("experience", self.experience),
+        ):
+            for warning in getattr(manager, "load_warnings", []) if manager else []:
+                problems.append(f"- {label}: {warning}")
         if self.logger and self.config.log_to_file and not self.logger.log_to_file:
             problems.append(
                 "- logging: writing to the log file failed earlier; "

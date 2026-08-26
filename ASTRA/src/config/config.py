@@ -13,15 +13,34 @@ DEFAULTS = {
     "log_level": "INFO",
     "log_to_file": False,
     "check_for_updates": True,
+    "gui_theme": "dark",
+
     "use_language_fallback": False,
     "language_base_url": "http://localhost:11434",
-    "language_model": "qwen3:4b",
+    "language_model": "gemma3:4b",
     "language_generate_timeout": 240,
+    "language_num_ctx": 4096,
+    "language_temperature": 0.35,
+    "language_keep_alive": "10m",
+
     "use_vision_model": False,
     "vision_base_url": "http://localhost:11434",
-    "vision_model": "llava:latest",
+    "vision_model": "gemma3:4b",
     "vision_generate_timeout": 240,
+    "vision_num_ctx": 2048,
+
+    "self_learning_mode": "review",
+
+    "screen_observer_enabled": False,
+    "screen_observer_poll_seconds": 3,
+    "screen_observer_min_analysis_interval": 90,
+    "screen_observer_change_threshold": 0.06,
+    "screen_observer_notify_threshold": 0.82,
+    "screen_observer_notification_cooldown": 600,
 }
+
+_ALLOWED_SELF_LEARNING_MODES = {"off", "review", "auto"}
+_ALLOWED_GUI_THEMES = {"dark", "light"}
 
 
 class Config:
@@ -31,6 +50,7 @@ class Config:
         self.load_warnings = []
         settings = dict(DEFAULTS)
         settings.update(self._validated(self._load()))
+
         self.name = settings["name"]
         self.version = settings.get("version") or UNKNOWN_VERSION
         if not settings.get("version"):
@@ -39,21 +59,92 @@ class Config:
                 f"whether it's up to date until it's set (if update checks "
                 f"are enabled, they still report the latest available version)."
             )
+
         self.log_level = self._validated_log_level(settings["log_level"])
         self.log_to_file = settings["log_to_file"]
         self.check_for_updates = settings["check_for_updates"]
+
+        theme = str(settings["gui_theme"]).strip().lower()
+        if theme not in _ALLOWED_GUI_THEMES:
+            self.load_warnings.append(
+                f'{self.path.name} has invalid "gui_theme" ({theme!r}); '
+                'expected "dark" or "light". Using "dark".'
+            )
+            theme = "dark"
+        self.gui_theme = theme
+
         self.use_language_fallback = settings["use_language_fallback"]
         self.language_base_url = settings["language_base_url"]
         self.language_model = settings["language_model"]
-        self.language_generate_timeout = settings["language_generate_timeout"]
+        self.language_generate_timeout = self._bounded_float(
+            "language_generate_timeout",
+            settings["language_generate_timeout"],
+            minimum=1.0,
+            maximum=3600.0,
+        )
+        self.language_num_ctx = self._bounded_int(
+            "language_num_ctx", settings["language_num_ctx"], minimum=512, maximum=131072
+        )
+        self.language_temperature = self._bounded_float(
+            "language_temperature", settings["language_temperature"], minimum=0.0, maximum=2.0
+        )
+        self.language_keep_alive = settings["language_keep_alive"]
+
         self.use_vision_model = settings["use_vision_model"]
         self.vision_base_url = settings["vision_base_url"]
         self.vision_model = settings["vision_model"]
-        self.vision_generate_timeout = settings["vision_generate_timeout"]
+        self.vision_generate_timeout = self._bounded_float(
+            "vision_generate_timeout",
+            settings["vision_generate_timeout"],
+            minimum=1.0,
+            maximum=3600.0,
+        )
+        self.vision_num_ctx = self._bounded_int(
+            "vision_num_ctx", settings["vision_num_ctx"], minimum=512, maximum=131072
+        )
+
+        mode = str(settings["self_learning_mode"]).strip().lower()
+        if mode not in _ALLOWED_SELF_LEARNING_MODES:
+            self.load_warnings.append(
+                f'{self.path.name} has invalid "self_learning_mode" ({mode!r}); '
+                'expected "off", "review", or "auto". Using "review".'
+            )
+            mode = "review"
+        self.self_learning_mode = mode
+
+        self.screen_observer_enabled = settings["screen_observer_enabled"]
+        self.screen_observer_poll_seconds = self._bounded_float(
+            "screen_observer_poll_seconds",
+            settings["screen_observer_poll_seconds"],
+            minimum=1.0,
+            maximum=3600.0,
+        )
+        self.screen_observer_min_analysis_interval = self._bounded_float(
+            "screen_observer_min_analysis_interval",
+            settings["screen_observer_min_analysis_interval"],
+            minimum=10.0,
+            maximum=86400.0,
+        )
+        self.screen_observer_change_threshold = self._bounded_float(
+            "screen_observer_change_threshold",
+            settings["screen_observer_change_threshold"],
+            minimum=0.0,
+            maximum=1.0,
+        )
+        self.screen_observer_notify_threshold = self._bounded_float(
+            "screen_observer_notify_threshold",
+            settings["screen_observer_notify_threshold"],
+            minimum=0.0,
+            maximum=1.0,
+        )
+        self.screen_observer_notification_cooldown = self._bounded_float(
+            "screen_observer_notification_cooldown",
+            settings["screen_observer_notification_cooldown"],
+            minimum=0.0,
+            maximum=86400.0,
+        )
 
     def _validated_log_level(self, value):
-        # Logger would silently coerce an unknown level to INFO; catch it
-        # here instead so the fallback is observable (and accept any casing).
         normalized = value.strip().upper()
         if normalized in LEVELS:
             return normalized
@@ -84,16 +175,38 @@ class Config:
             return isinstance(value, (int, float)) and not isinstance(value, bool)
         return isinstance(value, type(default))
 
+    def _bounded_int(self, key, value, minimum, maximum):
+        value = int(value)
+        if minimum <= value <= maximum:
+            return value
+        fallback = int(DEFAULTS[key])
+        self.load_warnings.append(
+            f'{self.path.name} has out-of-range "{key}" ({value}); '
+            f"expected {minimum}..{maximum}, using {fallback}."
+        )
+        return fallback
+
+    def _bounded_float(self, key, value, minimum, maximum):
+        value = float(value)
+        if minimum <= value <= maximum:
+            return value
+        fallback = float(DEFAULTS[key])
+        self.load_warnings.append(
+            f'{self.path.name} has out-of-range "{key}" ({value}); '
+            f"expected {minimum}..{maximum}, using {fallback}."
+        )
+        return fallback
+
     def _load(self):
         if not self.path.exists():
             return {}
         try:
-            # utf-8-sig: tolerate the BOM PowerShell's Out-File -Encoding utf8
-            # prepends, which plain utf-8 rejects as invalid JSON.
             with open(self.path, "r", encoding="utf-8-sig") as f:
                 loaded = json.load(f)
         except json.JSONDecodeError as error:
-            self.load_warnings.append(f"{self.path.name} is not valid JSON ({error}); using defaults.")
+            self.load_warnings.append(
+                f"{self.path.name} is not valid JSON ({error}); using defaults."
+            )
             return {}
         except UnicodeDecodeError as error:
             self.load_warnings.append(
@@ -102,9 +215,13 @@ class Config:
             )
             return {}
         except OSError as error:
-            self.load_warnings.append(f"{self.path.name} could not be read ({error}); using defaults.")
+            self.load_warnings.append(
+                f"{self.path.name} could not be read ({error}); using defaults."
+            )
             return {}
         if not isinstance(loaded, dict):
-            self.load_warnings.append(f"{self.path.name} does not contain a JSON object; using defaults.")
+            self.load_warnings.append(
+                f"{self.path.name} does not contain a JSON object; using defaults."
+            )
             return {}
         return loaded

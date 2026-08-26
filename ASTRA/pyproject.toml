@@ -8,10 +8,14 @@ version = "0.0.18"
 description = "Astra - a personal AI assistant, built from scratch."
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+  "mss>=10,<11",
+  "Pillow>=11,<13",
+  "psutil>=7,<8"
+]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest>=8,<10"]
 
 [project.scripts]
 astra = "main:main"
@@ -19,5 +23,21 @@ astra-gui = "gui.app:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
-packages = ["actions", "automation", "commands", "config", "core", "dev", "experience", "gui", "learning", "memory", "modules", "research", "speech", "utils", "vision"]
+packages = [
+  "actions",
+  "automation",
+  "commands",
+  "config",
+  "core",
+  "dev",
+  "experience",
+  "gui",
+  "learning",
+  "memory",
+  "modules",
+  "research",
+  "speech",
+  "utils",
+  "vision"
+]
 py-modules = ["main"]
