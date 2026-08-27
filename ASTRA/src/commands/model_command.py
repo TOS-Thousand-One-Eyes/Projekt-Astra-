@@ -328,6 +328,8 @@ class ModelCommand(Command):
             disable = getattr(observer, "disable", None)
             if callable(disable):
                 disable()
+            self._persist_config({"screen_observer_enabled": False})
+            self._set_config_value("screen_observer_enabled", False)
             return (
                 "Eyes were disabled because this model does not advertise "
                 "vision/image capability."
@@ -498,6 +500,18 @@ class ModelCommand(Command):
         return persisted
 
     def _persist_config(self, updates):
+        persist = getattr(self.config, "persist", None)
+        if callable(persist):
+            saved = persist(updates)
+            if not saved and self.logger:
+                warning = (
+                    self.config.load_warnings[-1]
+                    if getattr(self.config, "load_warnings", None)
+                    else "unknown config write failure"
+                )
+                self.logger.warning(f"Failed to persist model config: {warning}")
+            return saved
+
         path = getattr(self.config, "path", None)
         if not path:
             return False

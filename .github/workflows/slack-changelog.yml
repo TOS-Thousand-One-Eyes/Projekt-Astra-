@@ -1,0 +1,25 @@
+name: Slack changelog
+
+on:
+  push:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Explain missing optional integration
+        if: env.SLACK_WEBHOOK_URL == ''
+        run: echo "Slack changelog skipped; add the SLACK_WEBHOOK_URL repository secret to enable it."
+      - name: Post token-free changelog
+        if: env.SLACK_WEBHOOK_URL != ''
+        working-directory: ASTRA
+        env:
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: python scripts/post_slack_changelog.py

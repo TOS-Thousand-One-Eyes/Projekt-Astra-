@@ -8,6 +8,15 @@
 
 ## Added
 
+### Token-free Slack changelog automation
+
+- Added a repository-root GitHub workflow that summarizes every push from GitHub
+  event metadata and posts it through a secret-backed Slack Incoming Webhook.
+- The formatter lists commits, changed files, and affected components without an
+  AI/model call, so routine team changelogs consume no model tokens.
+- Added secret redaction, Slack-host URL validation, bounded messages, tests, and
+  one-time setup documentation.
+
 ### Integrated local Eyes
 
 - Added a Brain-managed passive `ScreenObserverModule` with local in-memory
@@ -16,6 +25,9 @@
 - Added Brain event delivery for Eyes alerts so visual notifications are stored
   in structured Experience rather than existing only as logger output.
 - Added primary-monitor-only capture as the privacy-first default.
+- Eyes on/off state now persists through restart.
+- Stale Eyes configuration degrades safely when its model is missing/text-only,
+  and slow in-flight requests cannot create duplicate workers on quick re-enable.
 
 ### Explicit continual self-learning
 
@@ -24,6 +36,11 @@
   intake.
 - Added explicit `self learning preference/correction/status/review/mode/
   approve/reject` commands.
+- Added `self learning guidance` so approved rules and their revocable candidate
+  IDs remain visible.
+- Correction traces now retain the immediately preceding ASTRA response.
+- Self-learning mode changes persist through restart using the shared atomic
+  config writer.
 
 ### Runtime model + GUI controls
 
@@ -35,7 +52,7 @@
 
 ## Changed
 
-### Learning evaluator upgraded to v3
+### Learning evaluator upgraded to v4
 
 - Replaced the repetitive 13-case proficient prototype with a compact grounded
   matrix that tests source grounding, application, cross-source synthesis,
@@ -53,7 +70,7 @@
   chunk-retrieved at answer/eval time.
 - Every learning payload has a content revision hash. New/changed sources or
   target settings invalidate stale eval/approval/promotion state.
-- Existing v2/13-case files migrate automatically and invalidate old validation.
+- Existing v2/v3 and 13-case files migrate automatically and invalidate old validation.
 - Duplicate source content is deduplicated without unnecessarily invalidating a
   current evaluation.
 - Unicode retrieval and non-Latin-safe subject slugs replace ASCII-only

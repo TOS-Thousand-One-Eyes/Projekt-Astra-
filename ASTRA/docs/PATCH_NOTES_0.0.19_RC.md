@@ -1,7 +1,7 @@
 # ASTRA v0.0.19 RC — Patch Notes
 
 > Review candidate only. This version has **not** been pushed or released.
-> Runtime version remains `0.0.18` until the review candidate is accepted.
+> Runtime and package metadata now identify the candidate consistently as `0.0.19`.
 
 ## Headline
 
@@ -9,10 +9,10 @@ This RC turns the earlier learning/Eyes prototype into a safer, more coherent
 local-first implementation. The focus is not adding more surface area; it is
 making the existing new features trustworthy enough to test against real use.
 
-## Learning v3
+## Learning v4
 
-- Learning files migrate to `astra-learning-subject/v3` and evaluator version 3.
-- Existing v2/13-case eval state is invalidated on migration. An old pass can
+- Learning files migrate to `astra-learning-subject/v4` and evaluator version 4.
+- Existing v2/v3 and 13-case eval state is invalidated on migration. An old pass can
   never silently authorize a new evaluator.
 - Adding or changing source material invalidates the previous eval, approval,
   promotion-ready flag, promoted revision, and compact promotion note.
@@ -42,7 +42,7 @@ For factual answers the model must return structured JSON containing:
 - `answer`;
 - cited source IDs;
 - an **exact `evidence_quote` copied from the captured source**;
-- a decision: `answer`, `unknown`, `refuse`, or `review_required`.
+- a decision: `supported`, `unsupported`, `privacy_block`, or `review_gate`.
 
 ASTRA verifies that the quote actually exists in a cited source and that the
 answer is linked to the evidence. Proficient synthesis must cite at least two

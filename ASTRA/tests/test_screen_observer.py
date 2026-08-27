@@ -184,3 +184,44 @@ def test_callback_can_decline_delivery_and_fall_back_to_chat():
     )
     observer.analyze_once()
     assert any(level == "CHAT" for level, _ in logger.events)
+
+
+def test_startup_keeps_astra_running_when_persisted_eyes_model_is_unavailable():
+    logger = LoggerStub()
+    observer = ScreenObserverModule(
+        describer=None,
+        logger=logger,
+        enabled=True,
+    )
+
+    observer.start()
+
+    assert observer.enabled is False
+    assert any(
+        level == "WARNING" and "Eyes stayed off during startup" in message
+        for level, message in logger.events
+    )
+
+
+def test_disable_keeps_live_worker_reference_to_prevent_duplicate_thread():
+    class StillRunningThread:
+        def __init__(self):
+            self.joins = 0
+
+        def is_alive(self):
+            return True
+
+        def join(self, timeout=None):
+            self.joins += 1
+
+    observer = ScreenObserverModule(Describer("{}"), enabled=True)
+    worker = StillRunningThread()
+    observer._thread = worker
+
+    observer.disable()
+    assert observer._stop_event.is_set()
+    observer.enable()
+
+    assert worker.joins == 1
+    assert observer._thread is worker
+    assert observer._stop_event.is_set() is False

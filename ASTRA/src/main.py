@@ -1,5 +1,18 @@
+import builtins
+import getpass
+
+from actions.action_manager import ActionManager
+from actions.system_action_manager import SystemActionManager
+from automation.reminder_manager import ReminderManager
 from config.config import Config
 from core.brain import Brain
+from experience.experience_manager import ExperienceManager
+from experience.reflection_manager import ReflectionManager
+from identity.identity_manager import (
+    AuthenticationError,
+    IdentityManager,
+    IdentityStoreError,
+)
 from learning.learning_manager import LearningManager
 from learning.self_learning import SelfLearningManager
 from memory.memory_manager import MemoryManager
@@ -12,8 +25,13 @@ from vision.screen_observer import ScreenObserverModule
 from vision.semantic_vision import LocalVisionDescriber
 
 
-def build_runtime(config, logger):
-    memory = MemoryManager()
+def build_runtime(config, logger, identity=None, identity_manager=None):
+    private_data = identity.data_dir if identity else None
+    memory = (
+        MemoryManager(data_dir=private_data)
+        if private_data
+        else MemoryManager()
+    )
     modules = Modules(logger)
 
     language_module = None
@@ -73,11 +91,36 @@ def build_runtime(config, logger):
             source="language",
         )
 
-    learning = LearningManager(
-        language_module=language_module
+    learning = (
+        LearningManager(data_dir=private_data, language_module=language_module)
+        if private_data
+        else LearningManager(language_module=language_module)
     )
-    self_learning = SelfLearningManager(
-        mode=config.self_learning_mode
+    self_learning = (
+        SelfLearningManager(data_dir=private_data, mode=config.self_learning_mode)
+        if private_data
+        else SelfLearningManager(mode=config.self_learning_mode)
+    )
+    actions = ActionManager(data_dir=private_data) if private_data else ActionManager()
+    system_actions = (
+        SystemActionManager(data_dir=private_data)
+        if private_data
+        else SystemActionManager()
+    )
+    reminders = (
+        ReminderManager(data_dir=private_data)
+        if private_data
+        else ReminderManager()
+    )
+    experience = (
+        ExperienceManager(data_dir=private_data)
+        if private_data
+        else ExperienceManager()
+    )
+    reflections = (
+        ReflectionManager(data_dir=private_data)
+        if private_data
+        else ReflectionManager()
     )
 
     screen_observer = ScreenObserverModule(
@@ -117,22 +160,80 @@ def build_runtime(config, logger):
         self_learning=self_learning,
         vision_describer=vision_describer,
         screen_observer=screen_observer,
+        actions=actions,
+        system_actions=system_actions,
+        reminders=reminders,
+        experience=experience,
+        reflections=reflections,
+        identity=identity,
+        identity_manager=identity_manager,
     )
     return brain
 
 
+def prompt_cli_identity(manager, input_func=None, pin_reader=None):
+    input_func = input_func or builtins.input
+    pin_reader = pin_reader or getpass.getpass
+    profiles = manager.list_profiles()
+    names = "/".join(item["display_name"] for item in profiles)
+
+    while True:
+        selected = input_func(f"Profile [{names}]: ").strip()
+        try:
+            profile = manager.resolve_profile(selected)
+        except KeyError:
+            print(f"Unknown profile. Choose {names}.")
+            continue
+
+        if not profile["pin_configured"]:
+            print(f"First login for {profile['display_name']}: create a local PIN.")
+            first = pin_reader("New PIN (4-12 digits): ")
+            second = pin_reader("Confirm PIN: ")
+            if first != second:
+                print("PIN entries did not match.")
+                continue
+            try:
+                manager.initialize_pin(profile["id"], first)
+            except ValueError as error:
+                print(error)
+                continue
+            return manager.session_after_setup(profile["id"])
+
+        pin = pin_reader("PIN: ")
+        try:
+            return manager.authenticate(profile["id"], pin)
+        except AuthenticationError:
+            print("Incorrect PIN.")
+
+
 def main():
+    try:
+        identity_manager = IdentityManager()
+        identity = prompt_cli_identity(identity_manager)
+    except (KeyboardInterrupt, EOFError):
+        print()
+        return
+    except IdentityStoreError as error:
+        print(f"Identity startup failed: {error}")
+        return
+
     config = Config()
     logger = Logger(
         level=config.log_level,
         log_to_file=config.log_to_file,
+        log_path=identity.data_dir / "astra.log",
     )
-    brain = build_runtime(config, logger)
+    brain = build_runtime(
+        config,
+        logger,
+        identity=identity,
+        identity_manager=identity_manager,
+    )
 
     try:
         brain.start()
         while brain.is_running:
-            message = input("You: ")
+            message = input(f"{identity.display_name}: ")
             if not message.strip():
                 continue
             brain.receive(message)

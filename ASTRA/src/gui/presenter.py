@@ -151,3 +151,23 @@ def low_hw_summary():
         "Low-RAM profile: Tkinter/no browser engine, 4K language context, "
         "throttled Eyes, one-model reuse; Eyes adds mss/Pillow/psutil."
     )
+
+
+def should_auto_lock(
+    last_activity,
+    now,
+    minutes,
+    worker_running=False,
+    runtime_running=True,
+):
+    try:
+        configured_minutes = int(minutes)
+        idle_seconds = float(now) - float(last_activity)
+    except (TypeError, ValueError):
+        return False
+    return (
+        configured_minutes > 0
+        and idle_seconds >= configured_minutes * 60
+        and not worker_running
+        and runtime_running
+    )

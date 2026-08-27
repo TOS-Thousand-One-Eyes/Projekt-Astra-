@@ -111,9 +111,8 @@ enough: several bugs existed specifically **between** subsystems.
 
 ## What is intentionally not claimed
 
-- The connected GitHub repository cannot be bulk-cloned into this execution
-  environment, so the complete existing DEV test suite was **not** executed here.
-- Real Windows desktop behavior beyond the user's live Eyes tests cannot be
+- The repository was cloned and the complete deterministic suite passed, but real
+  Windows desktop behavior beyond the user's live Eyes tests cannot be
   fully reproduced in this Linux sandbox.
 - Real `gemma3:4b` quality is probabilistic; the deterministic eval/vision
   guards reduce trust in model self-reporting but do not make a 4B model perfect.

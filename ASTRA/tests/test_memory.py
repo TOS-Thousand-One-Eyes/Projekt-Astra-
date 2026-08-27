@@ -303,11 +303,15 @@ def test_memory_manager_forget_with_no_matching_note_leaves_short_memory_untouch
     assert memory.recall() == ["test"]
 
 
-def test_model_prompt_returns_raw_message_without_context(memory):
-    assert build_model_prompt("what should I do?", memory) == "what should I do?"
+def test_model_prompt_keeps_identity_and_grounding_without_memory_context(memory):
+    prompt = build_model_prompt("what should I do?", memory)
+
+    assert prompt.startswith("You are ASTRA, a local-first personal AI assistant.")
+    assert "Memory context:" not in prompt
+    assert prompt.endswith("User message: what should I do?")
 
 
-def test_model_prompt_includes_facts_notes_and_learned_memory(memory):
+def test_model_prompt_includes_facts_and_notes_but_not_stale_learned_memory(memory):
     memory.learn("name", "Erik")
     memory.remember("Compressor oil should be checked weekly.", entry_type="note")
     memory.remember("Learned subject: compressor maintenance. Summary: check oil and vibration.", entry_type="learned")
@@ -317,7 +321,7 @@ def test_model_prompt_includes_facts_notes_and_learned_memory(memory):
     assert "Memory context:" in prompt
     assert "[fact:name] name: Erik" in prompt
     assert "Compressor oil should be checked weekly." in prompt
-    assert "Learned subject: compressor maintenance" in prompt
+    assert "Learned subject: compressor maintenance" not in prompt
     assert "User message: What do you know about compressor oil?" in prompt
 
 

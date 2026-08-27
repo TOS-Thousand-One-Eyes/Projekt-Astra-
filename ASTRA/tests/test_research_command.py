@@ -140,7 +140,7 @@ def test_research_learn_creates_proficient_subject_from_fetched_sources(tmp_path
     assert payload["target_level"] == "proficient"
     assert len(payload["sources"]) == 1
     assert payload["sources"][0]["source"] == "web:https://example.com/line-balancing"
-    assert len(payload["eval_cases"]) == 13
+    assert len(payload["eval_cases"]) == 6
 
 
 def test_default_registry_dispatches_research_and_shares_learning(tmp_path, config):
@@ -173,4 +173,4 @@ def test_default_registry_dispatches_research_and_shares_learning(tmp_path, conf
     assert result.command_name == "ResearchCommand"
     assert "Research learning subject created: hydraulics" in result.response
     assert "- sources: 1" in status
-    assert "- eval cases: 13" in status
+    assert "- eval cases: 6" in status

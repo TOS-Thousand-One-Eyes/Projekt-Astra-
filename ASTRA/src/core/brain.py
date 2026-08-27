@@ -40,6 +40,8 @@ class Brain:
         reflections=None,
         self_learning=None,
         screen_observer=None,
+        identity=None,
+        identity_manager=None,
     ):
         self.state = self.OFFLINE
         self.logger = logger
@@ -49,6 +51,8 @@ class Brain:
         self.learning = learning
         self.self_learning = self_learning
         self.screen_observer = screen_observer
+        self.identity = identity
+        self.identity_manager = identity_manager
         self.experience = experience or ExperienceManager()
         self.reflections = reflections or ReflectionManager()
         self.commands = (
@@ -71,6 +75,8 @@ class Brain:
                 experience=self.experience,
                 reflections=self.reflections,
                 logger=logger,
+                identity=identity,
+                identity_manager=identity_manager,
             )
         )
         self.update_checker = update_checker
@@ -108,6 +114,11 @@ class Brain:
             self.logger.log(
                 f"Config loaded from {self.config.path.name}."
             )
+            if self.identity:
+                self.logger.log(
+                    "Active profile: "
+                    f"{self.identity.display_name} ({self.identity.user_id})."
+                )
             for warning in self.config.load_warnings:
                 self.logger.warning(warning)
             self.logger.log(
@@ -146,7 +157,11 @@ class Brain:
             raise
 
         self.logger.log("Brain is ready.")
-        name = self.memory.get_fact("name")
+        name = (
+            self.identity.display_name
+            if self.identity
+            else self.memory.get_fact("name")
+        )
         if name:
             self.logger.log(
                 f"Hello, {name}! I am {self.config.name}."
@@ -186,6 +201,11 @@ class Brain:
         if not self.is_running:
             return f"{self.config.name} is not running."
 
+        if self.self_learning and callable(
+            getattr(self.self_learning, "set_previous_assistant", None)
+        ):
+            self.self_learning.set_previous_assistant(self._last_response)
+
         result = self.commands.dispatch(message)
 
         try:
@@ -203,6 +223,7 @@ class Brain:
                 result.response,
                 command_name=result.command_name,
                 session_id=self._session_id,
+                actor_id=(self.identity.user_id if self.identity else None),
             )
         except Exception as error:
             self.logger.error(
@@ -238,6 +259,7 @@ class Brain:
                 command_name="EyesObservation",
                 session_id=self._session_id,
                 source="eyes",
+                actor_id=(self.identity.user_id if self.identity else None),
             )
         except Exception as error:
             self.logger.error(

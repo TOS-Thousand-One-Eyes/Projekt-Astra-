@@ -25,17 +25,20 @@ class GreetingCommand(Command):
         "- what is your name / who are you - ask who I am"
     )
 
-    def __init__(self, config, memory, logger=None):
+    def __init__(self, config, memory, logger=None, identity=None):
         super().__init__(logger)
         self.config = config
         self.memory = memory
+        self.identity = identity
 
     def handle(self, message, normalized):
         if normalized in self.IDENTITY_TRIGGERS:
             return f"I'm {self.config.name}, your personal AI assistant."
 
         if normalized in self.RESPONSES:
-            name = self.memory.get_fact("name")
+            name = self.memory.get_fact("name") or (
+                self.identity.display_name if self.identity else None
+            )
             if name and normalized in self.NAME_TEMPLATES:
                 return self.NAME_TEMPLATES[normalized].format(name=name)
             return self.RESPONSES[normalized]
