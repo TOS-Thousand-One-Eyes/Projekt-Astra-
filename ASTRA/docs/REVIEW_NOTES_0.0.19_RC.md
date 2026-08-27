@@ -63,3 +63,26 @@ The live Python test exposed source-acquisition false positives. The current
 bundle rejects incidental long-entry mentions, deduplicates near-identical
 memory candidates, and refreshes stale automatic `memory:` sources while
 preserving explicit evidence. Focused learning regression: 38/38 PASS.
+
+## Full integration recheck
+
+The actual `DEV-need-check` branch was cloned at `a2203c1` and the complete
+repository suite was run. The initial result was 428 passed / 6 failed. All six
+failures were stale compatibility assertions that contradicted already-documented
+v4 contracts: the stable ASTRA system prompt, LearningManager-only promoted
+knowledge, and the compact evaluator replacing the retired 13-case matrix.
+
+After aligning those regressions and closing newly found integration gaps:
+
+- full suite: **449/449 PASS**;
+- self-learning mode and Eyes enabled state persist atomically;
+- explicit correction traces retain the prior ASTRA answer;
+- active guidance is inspectable with `self learning guidance`;
+- text-only models fail `vision check` clearly;
+- a stale Eyes-on setting cannot prevent ASTRA startup;
+- quick Eyes off/on cannot spawn a duplicate worker while a model call is stuck;
+- CI is in repository-root `.github/workflows`, where GitHub actually discovers it;
+- optional Slack push changelogs are deterministic and consume no AI tokens.
+
+No push or Slack message has been performed. The remaining gates are the user's
+Windows/Ollama live checks and review of the uncommitted diff.

@@ -45,6 +45,28 @@ recommendation, and help. If Ollama is enabled from a GUI session that started
 without a language module, use `Restart Runtime` in the GUI so ASTRA reloads
 the updated config.
 
+## Local identity profiles
+
+ASTRA has two local profiles: **Erik** (`erik`) and **Petr** (`petr`). On first
+use, each person selects their profile and creates a 4-12 digit PIN. Later
+sessions require that profile's PIN. The PIN is salted and hashed locally; it is
+never accepted through chat and is never committed to GitHub. Use `who am i`,
+`identity status`, or `identity profiles` to inspect the active session.
+
+The profiles do not use IP addresses, face recognition, or network identity.
+Personal memory, source-backed learning, self-learning guidance, experiences,
+tasks, system actions, and reminders live under `data/users/<user_id>` so Erik
+and Petr do not silently train each other's profile. Pre-profile runtime data is
+copied to Erik once, without deleting the old files. The GUI shows the active
+profile and provides **Lock / switch** and **Change PIN** buttons.
+
+The GUI automatically locks after 15 minutes of inactivity by default, stops
+the runtime and Eyes, and clears the visible chat before another login. Set
+`identity_auto_lock_minutes` in `config.json` to another number of minutes, or
+to `0` to disable automatic locking. This PIN prevents accidental profile
+mix-ups; it does not encrypt the data directory against an operating-system
+administrator.
+
 ## Learning commands
 
 ASTRA now has a local-first learning workflow:
@@ -52,26 +74,47 @@ ASTRA now has a local-first learning workflow:
 ```
 learn about <topic>
 learn deeply about <topic>
-nauč se <téma>
 teach <topic>: <source text>
 learn source <topic>: <url>
 learning status
 learning status <topic>
+learning sources <topic>
 learning eval <topic>
 learning run-eval <topic>
 learning approve <topic>
 learning promote <topic>
+self learning status
+self learning review
+self learning guidance
+self learning scan
+self learning mode <off|review|auto>
+self learning preference <text>
+self learning correction <text>
+self learning approve <id>
+self learning reject <id>
 ```
 
-Learning subjects are stored in `data/learning` and are not promotion-ready until
+Learning subjects are stored in `data/users/<user_id>/learning` and are not promotion-ready until
 they have both review approval and a passing eval report.
-`learn deeply about <topic>` creates a proficient-level subject with a broader
-13-case eval matrix. `learn source <topic>: <url>` fetches an explicit web source
+`learn deeply about <topic>` creates a proficient-level subject with a compact
+grounded evaluator (normally 6 or 7 cases, depending on usable source coverage).
+`learn source <topic>: <url>` fetches an explicit web source
 and adds its readable text to the subject.
 `learning run-eval <topic>` uses the local language module when it is available;
 without a running local model, ASTRA keeps the eval prompts available for manual
 answer collection. `learning promote <topic>` is the final gate: it only writes
 an approved, eval-passing subject into long memory as a `learned` entry.
+
+Continual self-learning is explicit and persistent. Preferences may activate
+immediately in `auto` mode; factual corrections and Eyes observations remain
+review-gated. Correction traces retain the preceding ASTRA response for a later
+reviewed fine-tuning dataset, but this feature does not modify model weights.
+`self learning scan` uses the active local Ollama model to inspect up to eight
+recent ordinary exchanges and propose durable preferences, corrections, or
+memory notes. The transcript is treated as untrusted data, secrets and transient
+UI status are excluded, and every proposal remains pending even in `auto` mode.
+Approve or reject proposals through the normal `self learning review` flow.
+The scan makes no web requests and never changes model weights.
 
 ## Research commands
 
@@ -121,9 +164,11 @@ direct prompt to the local model after the same availability check.
 recommendation is `gemma3:1b`: it is a text model with an official Ollama size
 below half of the currently configured `llama3.2:3b` model. Install it outside
 ASTRA with `ollama pull gemma3:1b`, then switch with `model use gemma3:1b`.
-When the local language module handles normal chat fallback, ASTRA now builds a
-memory-aware prompt from relevant facts, notes, and promoted `learned` entries.
-If no useful context exists, the original message is sent unchanged.
+When the local language module handles normal chat fallback, ASTRA builds a stable
+grounded system prompt from relevant facts, notes, active approved guidance, and
+current promoted LearningManager sources. Old compact `learned` long-memory notes
+are deliberately excluded so stale knowledge cannot compete with the current
+source-backed learning revision.
 
 Vision-capable image description is configured separately from normal language
 fallback. Keep it disabled until an Ollama vision model is installed locally:
@@ -132,19 +177,32 @@ fallback. Keep it disabled until an Ollama vision model is installed locally:
 {
   "use_vision_model": true,
   "vision_base_url": "http://localhost:11434",
-  "vision_model": "llava:latest",
+  "vision_model": "gemma3:4b",
   "vision_generate_timeout": 240
 }
 ```
 
-`jarvis verify` checks this separate vision client when configured. Because
-Ollama model metadata does not prove image capability by itself, ASTRA still
-requires a real `image describe <path>` smoke before claiming visual
-understanding is fully ready.
+`jarvis verify` checks this separate vision client when configured. ASTRA checks
+Ollama's `/api/show` capabilities and still recommends a real
+`image describe <path>` or `eyes once` smoke test before relying on visual output.
+
+Passive local Eyes can be controlled with `eyes status`, `eyes on`, `eyes off`,
+and `eyes once`. Enabling/disabling persists to `config.json`; screenshots stay
+in RAM and go only to the configured local Ollama endpoint. Sensitive foreground
+windows and locked Windows desktops are skipped. If the saved model disappears
+or becomes text-only, Eyes stays off without preventing ASTRA from starting.
+
+## Slack changelog
+
+The repository-root `Slack changelog` GitHub workflow can post a deterministic
+summary after every push without calling an AI model. Configure the
+`SLACK_WEBHOOK_URL` repository secret as described in
+`docs/SLACK_CHANGELOG_SETUP.md`. The webhook itself is never stored in the repo.
 
 ## Experience memory commands
 
-ASTRA records structured user/assistant exchanges in `data/experience`:
+ASTRA records structured user/assistant exchanges in
+`data/users/<user_id>/experience`:
 
 ```
 experience recent
@@ -154,7 +212,8 @@ experience stats
 ```
 
 This is separate from free-form long memory. Each exchange keeps the user
-message, assistant response, command handler, timestamp, and session id so
+message, assistant response, command handler, timestamp, session id, and actor
+ID so
 JARVIS can inspect what actually happened and use it as evidence for later
 reflection or improvement work.
 

@@ -8,6 +8,7 @@ from commands.export_command import ExportCommand
 from commands.fact_command import FactCommand
 from commands.greeting_command import GreetingCommand
 from commands.help_command import HelpCommand
+from commands.identity_command import IdentityCommand
 from commands.jarvis_command import JarvisCommand
 from commands.learning_command import LearningCommand
 from commands.memory_command import MemoryCommand
@@ -33,12 +34,14 @@ class CommandRegistry:
         logger=None,
         learning=None,
         self_learning=None,
+        identity=None,
     ):
         self.commands = commands
         self.language_module = language_module
         self.memory = memory
         self.learning = learning
         self.self_learning = self_learning
+        self.identity = identity
         self._uses_default_context_builder = context_builder is None
         self.context_builder = context_builder or build_model_prompt
         self.logger = logger
@@ -108,6 +111,7 @@ class CommandRegistry:
                 self.memory,
                 learning=self.learning,
                 self_learning=self.self_learning,
+                identity=self.identity,
             )
 
         # Backwards-compatible custom context builders keep the old 2-arg API.
@@ -132,18 +136,26 @@ def build_default_registry(
     logger=None,
     self_learning=None,
     screen_observer=None,
+    identity=None,
+    identity_manager=None,
 ):
     fact = FactCommand(memory, logger=logger)
     note = MemoryCommand(memory, logger=logger)
-    greeting = GreetingCommand(config, memory, logger=logger)
+    greeting = GreetingCommand(config, memory, logger=logger, identity=identity)
     farewell = ExitCommand(config, logger=logger)
     export = ExportCommand(config, memory, logger=logger)
+    experience_command = ExperienceCommand(
+        experience=experience,
+        logger=logger,
+    )
 
     learning_command = LearningCommand(
         memory,
         learning=learning,
         language_module=language_module,
         self_learning=self_learning,
+        config=config,
+        experience=experience_command.experience,
         logger=logger,
     )
     research_command = ResearchCommand(
@@ -156,10 +168,6 @@ def build_default_registry(
         config=config,
         logger=logger,
         screen_observer=screen_observer,
-    )
-    experience_command = ExperienceCommand(
-        experience=experience,
-        logger=logger,
     )
     diagnostics = DiagnosticsCommand(
         config,
@@ -196,6 +204,7 @@ def build_default_registry(
         describer=vision_describer,
         language_module=language_module,
         observer=screen_observer,
+        config=config,
         logger=logger,
     )
     jarvis_command = JarvisCommand(
@@ -216,8 +225,14 @@ def build_default_registry(
         inspector=code,
         logger=logger,
     )
+    identity_command = IdentityCommand(
+        identity=identity,
+        identity_manager=identity_manager,
+        logger=logger,
+    )
 
     commands = [
+        identity_command,
         fact,
         note,
         learning_command,
@@ -246,6 +261,7 @@ def build_default_registry(
     # Preserve the original command order: Help sits before greeting/farewell
     # so "help" cannot accidentally fall through to generic chat.
     dispatch_commands = [
+        identity_command,
         fact,
         note,
         learning_command,
@@ -274,5 +290,6 @@ def build_default_registry(
         memory=memory,
         learning=learning_command.learning,
         self_learning=self_learning,
+        identity=identity,
         logger=logger,
     )

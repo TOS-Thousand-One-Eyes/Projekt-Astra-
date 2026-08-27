@@ -1,10 +1,11 @@
 {
   "name": "Astra",
-  "version": "0.0.18",
+  "version": "0.0.20",
   "log_level": "INFO",
   "log_to_file": false,
   "check_for_updates": true,
   "gui_theme": "dark",
+  "identity_auto_lock_minutes": 15,
   "use_language_fallback": true,
   "language_base_url": "http://localhost:11434",
   "language_model": "gemma3:4b",

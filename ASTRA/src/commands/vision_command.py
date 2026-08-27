@@ -19,6 +19,7 @@ class VisionCommand(Command):
         language_module=None,
         logger=None,
         observer=None,
+        config=None,
     ):
         super().__init__(logger)
         self.inspector = inspector or ImageInspector()
@@ -30,6 +31,7 @@ class VisionCommand(Command):
             source=source,
         )
         self.observer = observer
+        self.config = config
 
     def handle(self, message, normalized):
         if normalized in (
@@ -183,6 +185,23 @@ class VisionCommand(Command):
             client.ensure_available()
         except Exception as error:
             return f"Vision model unavailable: {error}"
+        capability_reader = getattr(client, "capabilities", None)
+        if callable(capability_reader):
+            try:
+                capabilities = {
+                    str(value).strip().lower()
+                    for value in capability_reader(getattr(client, "model", None))
+                    if str(value).strip()
+                }
+            except Exception:
+                capabilities = set()
+            if capabilities and not capabilities.intersection(
+                {"vision", "image", "images"}
+            ):
+                return (
+                    f"Vision model unavailable: {getattr(client, 'model', 'unknown')} "
+                    "does not advertise image/vision capability."
+                )
         model = getattr(
             client, "model", "unknown"
         )
@@ -224,16 +243,30 @@ class VisionCommand(Command):
             self.observer.enable()
         except ScreenObserverError as error:
             return f"Eyes unavailable: {error}"
+        persisted = self._persist_enabled(True)
         return (
             "Eyes enabled. Screenshots stay local/in RAM; "
-            "semantic checks are throttled."
+            "semantic checks are throttled. "
+            + (
+                "Persisted to config.json."
+                if persisted
+                else "Runtime changed; config was not persisted."
+            )
         )
 
     def _eyes_off(self):
         if not self.observer:
             return "Eyes are not configured in this ASTRA runtime."
         self.observer.disable()
-        return "Eyes disabled."
+        persisted = self._persist_enabled(False)
+        return (
+            "Eyes disabled. "
+            + (
+                "Persisted to config.json."
+                if persisted
+                else "Runtime changed; config was not persisted."
+            )
+        )
 
     def _eyes_once(self):
         if not self.observer:
@@ -248,6 +281,14 @@ class VisionCommand(Command):
             f"confidence={result.get('confidence', 0)}\n"
             f"{observation}"
         )
+
+    def _persist_enabled(self, enabled):
+        persist = getattr(self.config, "persist", None)
+        if callable(persist):
+            return persist({"screen_observer_enabled": bool(enabled)})
+        if self.config is not None:
+            self.config.screen_observer_enabled = bool(enabled)
+        return False
 
 
 def split_path_and_prompt(text):

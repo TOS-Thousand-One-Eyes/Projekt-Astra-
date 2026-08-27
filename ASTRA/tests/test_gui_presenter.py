@@ -4,6 +4,7 @@ from gui.presenter import (
     model_state_summary,
     normalize_theme,
     runtime_title,
+    should_auto_lock,
     theme_button_label,
 )
 
@@ -85,3 +86,11 @@ def test_low_hw_summary_is_truthful_about_new_dependencies():
     assert "no browser engine" in summary
     assert "4K" in summary
     assert "mss/Pillow/psutil" in summary
+
+
+def test_auto_lock_requires_elapsed_idle_time_and_idle_runtime():
+    assert should_auto_lock(100, 1000, 15) is True
+    assert should_auto_lock(101, 1000, 15) is False
+    assert should_auto_lock(100, 1000, 0) is False
+    assert should_auto_lock(100, 1000, 15, worker_running=True) is False
+    assert should_auto_lock(100, 1000, 15, runtime_running=False) is False

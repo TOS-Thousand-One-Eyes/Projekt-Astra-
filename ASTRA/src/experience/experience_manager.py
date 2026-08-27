@@ -27,12 +27,14 @@ class ExperienceManager:
         command_name=None,
         session_id=None,
         source="brain",
+        actor_id=None,
     ):
         with self._lock:
             exchange = {
                 "id": self._next_id(),
                 "timestamp": timestamp(),
                 "session_id": session_id,
+                "actor_id": actor_id,
                 "source": source or "brain",
                 "command": command_name or "unknown",
                 "user": str(user_message),

@@ -2,13 +2,19 @@ import json
 import os
 import queue
 import threading
+import time
 import uuid
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, simpledialog, ttk
 from tkinter.scrolledtext import ScrolledText
 
+from actions.action_manager import ActionManager
+from actions.system_action_manager import SystemActionManager
+from automation.reminder_manager import ReminderManager
 from config.config import Config
 from core.brain import Brain
+from experience.experience_manager import ExperienceManager
+from experience.reflection_manager import ReflectionManager
 from gui.presenter import (
     GUI_THEMES,
     QUICK_COMMANDS,
@@ -16,8 +22,10 @@ from gui.presenter import (
     model_state_summary,
     normalize_theme,
     runtime_title,
+    should_auto_lock,
     theme_button_label,
 )
+from identity.identity_manager import AuthenticationError, IdentityManager
 from learning.learning_manager import LearningManager
 from learning.self_learning import SelfLearningManager
 from memory.memory_manager import MemoryManager
@@ -55,8 +63,13 @@ class GuiLogger(Logger):
             )
 
 
-def build_brain(config, logger):
-    memory = MemoryManager()
+def build_brain(config, logger, identity=None, identity_manager=None):
+    private_data = identity.data_dir if identity else None
+    memory = (
+        MemoryManager(data_dir=private_data)
+        if private_data
+        else MemoryManager()
+    )
     modules = Modules(logger)
 
     language_module = None
@@ -123,11 +136,36 @@ def build_brain(config, logger):
             source="language",
         )
 
-    learning = LearningManager(
-        language_module=language_module
+    learning = (
+        LearningManager(data_dir=private_data, language_module=language_module)
+        if private_data
+        else LearningManager(language_module=language_module)
     )
-    self_learning = SelfLearningManager(
-        mode=config.self_learning_mode
+    self_learning = (
+        SelfLearningManager(data_dir=private_data, mode=config.self_learning_mode)
+        if private_data
+        else SelfLearningManager(mode=config.self_learning_mode)
+    )
+    actions = ActionManager(data_dir=private_data) if private_data else ActionManager()
+    system_actions = (
+        SystemActionManager(data_dir=private_data)
+        if private_data
+        else SystemActionManager()
+    )
+    reminders = (
+        ReminderManager(data_dir=private_data)
+        if private_data
+        else ReminderManager()
+    )
+    experience = (
+        ExperienceManager(data_dir=private_data)
+        if private_data
+        else ExperienceManager()
+    )
+    reflections = (
+        ReflectionManager(data_dir=private_data)
+        if private_data
+        else ReflectionManager()
     )
 
     screen_observer = ScreenObserverModule(
@@ -174,6 +212,13 @@ def build_brain(config, logger):
         self_learning=self_learning,
         vision_describer=vision_describer,
         screen_observer=screen_observer,
+        actions=actions,
+        system_actions=system_actions,
+        reminders=reminders,
+        experience=experience,
+        reflections=reflections,
+        identity=identity,
+        identity_manager=identity_manager,
     )
     return brain
 
@@ -189,15 +234,92 @@ def language_module_from(brain):
     return None
 
 
+def prompt_gui_identity(root, manager):
+    profiles = manager.list_profiles()
+    names = "/".join(item["display_name"] for item in profiles)
+    while True:
+        selected = simpledialog.askstring(
+            "ASTRA login",
+            f"Choose profile ({names}):",
+            initialvalue=profiles[0]["display_name"],
+            parent=root,
+        )
+        if selected is None:
+            return None
+        try:
+            profile = manager.resolve_profile(selected)
+        except KeyError:
+            messagebox.showerror(
+                "Unknown profile",
+                f"Choose one of: {names}.",
+                parent=root,
+            )
+            continue
+
+        if not profile["pin_configured"]:
+            first = simpledialog.askstring(
+                "Create local PIN",
+                (
+                    f"First login for {profile['display_name']}.\n"
+                    "Create a PIN containing 4 to 12 digits:"
+                ),
+                show="*",
+                parent=root,
+            )
+            if first is None:
+                return None
+            second = simpledialog.askstring(
+                "Confirm local PIN",
+                "Enter the same PIN again:",
+                show="*",
+                parent=root,
+            )
+            if second is None:
+                return None
+            if first != second:
+                messagebox.showerror(
+                    "PIN mismatch",
+                    "The two PIN entries did not match.",
+                    parent=root,
+                )
+                continue
+            try:
+                manager.initialize_pin(profile["id"], first)
+            except ValueError as error:
+                messagebox.showerror("Invalid PIN", str(error), parent=root)
+                continue
+            return manager.session_after_setup(profile["id"])
+
+        pin = simpledialog.askstring(
+            "ASTRA login",
+            f"PIN for {profile['display_name']}:",
+            show="*",
+            parent=root,
+        )
+        if pin is None:
+            return None
+        try:
+            return manager.authenticate(profile["id"], pin)
+        except AuthenticationError:
+            messagebox.showerror(
+                "Login failed",
+                "Incorrect PIN.",
+                parent=root,
+            )
+
+
 class AstraTkApp:
-    def __init__(self, root):
+    def __init__(self, root, identity, identity_manager):
         self.root = root
+        self.identity = identity
+        self.identity_manager = identity_manager
         self.events = queue.Queue()
         self.config = None
         self.logger = None
         self.brain = None
         self.worker_running = False
         self.model_refresh_running = False
+        self.last_activity = time.monotonic()
 
         self.bootstrap_config = Config()
         self.theme_name = normalize_theme(
@@ -217,6 +339,9 @@ class AstraTkApp:
         self.model_var = tk.StringVar(
             value=""
         )
+        self.user_var = tk.StringVar(
+            value=f"User: {self.identity.display_name}"
+        )
 
         self._build_style()
         self._build_layout()
@@ -225,9 +350,15 @@ class AstraTkApp:
             False
         )
         self._start_runtime()
+        self.root.bind_all("<Any-KeyPress>", self._record_activity, add="+")
+        self.root.bind_all("<Any-Button>", self._record_activity, add="+")
         self.root.after(
             80,
             self._process_events,
+        )
+        self.root.after(
+            30_000,
+            self._check_auto_lock,
         )
 
     def _build_style(self):
@@ -370,6 +501,23 @@ class AstraTkApp:
 
     def _persist_theme(self):
         config = self.config or self.bootstrap_config
+        persist = getattr(config, "persist", None)
+        if callable(persist):
+            saved = persist({"gui_theme": self.theme_name})
+            if not saved:
+                if self.logger:
+                    warning = (
+                        config.load_warnings[-1]
+                        if getattr(config, "load_warnings", None)
+                        else "unknown config write failure"
+                    )
+                    self.logger.warning(f"Failed to persist GUI theme: {warning}")
+                return False
+            self.bootstrap_config.gui_theme = self.theme_name
+            if self.config:
+                self.config.gui_theme = self.theme_name
+            return True
+
         path = getattr(config, "path", None)
         if not path:
             return False
@@ -469,11 +617,49 @@ class AstraTkApp:
         )
         self.theme_button.grid(
             row=0,
+            column=3,
+            rowspan=2,
+            sticky="e",
+            padx=(12, 0),
+        )
+        ttk.Label(
+            header,
+            textvariable=self.user_var,
+            style="Subtle.TLabel",
+        ).grid(
+            row=0,
             column=1,
             rowspan=2,
             sticky="e",
             padx=(12, 0),
         )
+        self.lock_button = ttk.Button(
+            header,
+            text="Lock / switch",
+            style="Action.TButton",
+            command=self.lock_and_switch,
+        )
+        self.lock_button.grid(
+            row=0,
+            column=2,
+            rowspan=2,
+            sticky="e",
+            padx=(12, 0),
+        )
+        self.pin_button = ttk.Button(
+            header,
+            text="Change PIN",
+            style="Action.TButton",
+            command=self.change_pin,
+        )
+        self.pin_button.grid(
+            row=0,
+            column=3,
+            rowspan=2,
+            sticky="e",
+            padx=(12, 0),
+        )
+        self.theme_button.grid_configure(column=4)
 
         status = ttk.Frame(
             shell,
@@ -775,10 +961,13 @@ class AstraTkApp:
                 log_to_file=(
                     config.log_to_file
                 ),
+                log_path=self.identity.data_dir / "astra.log",
             )
             brain = build_brain(
                 config,
                 logger,
+                identity=self.identity,
+                identity_manager=self.identity_manager,
             )
             brain.start()
         except Exception as error:
@@ -857,9 +1046,10 @@ class AstraTkApp:
         )
         self._append(
             "user",
-            "You",
+            self.identity.display_name,
             message,
         )
+        self._record_activity()
         self.worker_running = True
         self._set_controls_enabled(
             False
@@ -898,6 +1088,8 @@ class AstraTkApp:
         self.model_refresh_button.configure(
             state="disabled"
         )
+        self.lock_button.configure(state="disabled")
+        self.pin_button.configure(state="disabled")
         threading.Thread(
             target=self._model_refresh_worker,
             daemon=True,
@@ -994,9 +1186,7 @@ class AstraTkApp:
                     self.brain,
                 ) = payload
                 self.title_var.set(
-                    runtime_title(
-                        self.config
-                    )
+                    f"{runtime_title(self.config)} — {self.identity.display_name}"
                 )
                 self._apply_theme(
                     getattr(self.config, "gui_theme", self.theme_name),
@@ -1050,8 +1240,11 @@ class AstraTkApp:
                 )
             elif event == "model_list_error":
                 self.model_refresh_running = False
-                self.model_refresh_button.configure(
-                    state="normal"
+                self._set_controls_enabled(
+                    bool(
+                        self.brain
+                        and self.brain.is_running
+                    )
                 )
                 self.events.put(
                     (
@@ -1076,7 +1269,7 @@ class AstraTkApp:
             summary["status"]
         )
         self.detail_var.set(
-            summary["detail"]
+            f"{summary['detail']} · profile {self.identity.display_name}"
         )
 
     def _set_controls_enabled(
@@ -1100,6 +1293,20 @@ class AstraTkApp:
             )
         self.theme_button.configure(
             state=state
+        )
+        self.lock_button.configure(
+            state=(
+                "disabled"
+                if self.worker_running or self.model_refresh_running
+                else "normal"
+            )
+        )
+        self.pin_button.configure(
+            state=(
+                "disabled"
+                if self.worker_running or self.model_refresh_running
+                else "normal"
+            )
         )
 
         self.model_combo.configure(
@@ -1128,6 +1335,132 @@ class AstraTkApp:
         self.restart_button.configure(
             state=restart_state
         )
+
+    def _record_activity(self, _event=None):
+        self.last_activity = time.monotonic()
+
+    def _check_auto_lock(self):
+        try:
+            config = self.config or self.bootstrap_config
+            minutes = int(
+                getattr(config, "identity_auto_lock_minutes", 15)
+            )
+            if should_auto_lock(
+                self.last_activity,
+                time.monotonic(),
+                minutes,
+                worker_running=(self.worker_running or self.model_refresh_running),
+                runtime_running=bool(self.brain and self.brain.is_running),
+            ):
+                self.lock_and_switch(auto=True)
+        finally:
+            try:
+                if self.root.winfo_exists():
+                    self.root.after(30_000, self._check_auto_lock)
+            except tk.TclError:
+                pass
+
+    def lock_and_switch(self, auto=False):
+        if self.worker_running or self.model_refresh_running:
+            return
+        self.worker_running = True
+        self._set_controls_enabled(False)
+        try:
+            if self.brain and self.brain.is_running:
+                self.brain.stop()
+        except Exception as error:
+            self.events.put(
+                (
+                    "system",
+                    f"Runtime stop failed while locking: {type(error).__name__}: {error}",
+                )
+            )
+        self.config = None
+        self.logger = None
+        self.brain = None
+        self.model_var.set("")
+        self.model_combo["values"] = ()
+        self._drain_events()
+        self._clear_chat()
+        if auto:
+            messagebox.showinfo(
+                "ASTRA locked",
+                "ASTRA locked after inactivity. Log in to continue.",
+                parent=self.root,
+            )
+        self.root.withdraw()
+        identity = prompt_gui_identity(self.root, self.identity_manager)
+        if identity is None:
+            self.root.destroy()
+            return
+        self.identity = identity
+        self.user_var.set(f"User: {identity.display_name}")
+        self.last_activity = time.monotonic()
+        self.worker_running = False
+        self.root.deiconify()
+        self._start_runtime()
+
+    def change_pin(self):
+        if self.worker_running or self.model_refresh_running:
+            return
+        current = simpledialog.askstring(
+            "Change PIN",
+            f"Current PIN for {self.identity.display_name}:",
+            show="*",
+            parent=self.root,
+        )
+        if current is None:
+            return
+        new_pin = simpledialog.askstring(
+            "Change PIN",
+            "New PIN (4-12 digits):",
+            show="*",
+            parent=self.root,
+        )
+        if new_pin is None:
+            return
+        confirmation = simpledialog.askstring(
+            "Change PIN",
+            "Enter the new PIN again:",
+            show="*",
+            parent=self.root,
+        )
+        if confirmation is None:
+            return
+        if new_pin != confirmation:
+            messagebox.showerror(
+                "PIN mismatch",
+                "The two new PIN entries did not match.",
+                parent=self.root,
+            )
+            return
+        try:
+            self.identity_manager.change_pin(
+                self.identity.user_id,
+                current,
+                new_pin,
+            )
+        except (AuthenticationError, ValueError) as error:
+            messagebox.showerror("PIN change failed", str(error), parent=self.root)
+            return
+        self._record_activity()
+        messagebox.showinfo(
+            "PIN changed",
+            f"PIN changed for {self.identity.display_name}.",
+            parent=self.root,
+        )
+
+    def _clear_chat(self):
+        self.chat.configure(state="normal")
+        self.chat.delete("1.0", "end")
+        self.chat.configure(state="disabled")
+
+    def _drain_events(self):
+        while True:
+            try:
+                self.events.get_nowait()
+            except queue.Empty:
+                return
 
     def _append(
         self,
@@ -1169,7 +1502,23 @@ class AstraTkApp:
 
 def main():
     root = tk.Tk()
-    app = AstraTkApp(root)
+    root.withdraw()
+    try:
+        identity_manager = IdentityManager()
+        identity = prompt_gui_identity(root, identity_manager)
+    except Exception as error:
+        messagebox.showerror(
+            "ASTRA identity error",
+            f"Identity startup failed: {type(error).__name__}: {error}",
+            parent=root,
+        )
+        root.destroy()
+        return
+    if identity is None:
+        root.destroy()
+        return
+    app = AstraTkApp(root, identity, identity_manager)
+    root.deiconify()
     root.protocol(
         "WM_DELETE_WINDOW",
         app.close,

@@ -156,7 +156,7 @@ def test_model_use_rejects_unregistered_model():
 
 
 def test_switching_shared_eyes_to_text_only_model_disables_eyes(tmp_path):
-    config, _path = make_config(tmp_path, model="gemma3:4b")
+    config, path = make_config(tmp_path, model="gemma3:4b")
     client = StubClient()
     client.model = "gemma3:4b"
     module = StubLanguageModule(client)
@@ -167,6 +167,7 @@ def test_switching_shared_eyes_to_text_only_model_disables_eyes(tmp_path):
     )
     assert observer.disabled is True
     assert "Eyes were disabled" in response
+    assert json.loads(path.read_text(encoding="utf-8"))["screen_observer_enabled"] is False
 
 
 def test_switching_to_vision_model_keeps_shared_eyes_available(tmp_path):

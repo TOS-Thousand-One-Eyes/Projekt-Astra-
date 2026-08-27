@@ -1,4 +1,7 @@
 import json
+import os
+import threading
+import uuid
 from pathlib import Path
 
 from utils.logger import LEVELS
@@ -14,6 +17,7 @@ DEFAULTS = {
     "log_to_file": False,
     "check_for_updates": True,
     "gui_theme": "dark",
+    "identity_auto_lock_minutes": 15,
 
     "use_language_fallback": False,
     "language_base_url": "http://localhost:11434",
@@ -41,6 +45,8 @@ DEFAULTS = {
 
 _ALLOWED_SELF_LEARNING_MODES = {"off", "review", "auto"}
 _ALLOWED_GUI_THEMES = {"dark", "light"}
+_CONFIG_WRITE_LOCK = threading.RLock()
+_PERSISTABLE_KEYS = set(DEFAULTS) | {"version"}
 
 
 class Config:
@@ -72,6 +78,12 @@ class Config:
             )
             theme = "dark"
         self.gui_theme = theme
+        self.identity_auto_lock_minutes = self._bounded_int(
+            "identity_auto_lock_minutes",
+            settings["identity_auto_lock_minutes"],
+            minimum=0,
+            maximum=1440,
+        )
 
         self.use_language_fallback = settings["use_language_fallback"]
         self.language_base_url = settings["language_base_url"]
@@ -196,6 +208,77 @@ class Config:
             f"expected {minimum}..{maximum}, using {fallback}."
         )
         return fallback
+
+    def persist(self, updates):
+        """Atomically persist validated runtime settings and update this instance."""
+        if not isinstance(updates, dict) or not updates:
+            raise ValueError("Config updates must be a non-empty mapping.")
+
+        normalized = {}
+        for key, value in updates.items():
+            if key not in _PERSISTABLE_KEYS:
+                raise ValueError(f"Unknown persistent config setting: {key}")
+            if key == "version":
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError("Config version must be a non-empty string.")
+                normalized[key] = value.strip()
+                continue
+
+            default = DEFAULTS[key]
+            if not self._same_type(value, default):
+                raise ValueError(
+                    f"Invalid value for {key}: expected {type(default).__name__}."
+                )
+            normalized[key] = value
+
+        mode = normalized.get("self_learning_mode")
+        if mode is not None and mode not in _ALLOWED_SELF_LEARNING_MODES:
+            raise ValueError(
+                "Invalid self_learning_mode; use off, review, or auto."
+            )
+        theme = normalized.get("gui_theme")
+        if theme is not None and theme not in _ALLOWED_GUI_THEMES:
+            raise ValueError("Invalid gui_theme; use dark or light.")
+
+        tmp_path = None
+        try:
+            with _CONFIG_WRITE_LOCK:
+                payload = {}
+                if self.path.exists():
+                    with open(self.path, "r", encoding="utf-8-sig") as handle:
+                        loaded = json.load(handle)
+                    if not isinstance(loaded, dict):
+                        raise ValueError(
+                            f"{self.path.name} does not contain a JSON object."
+                        )
+                    payload = loaded
+
+                payload.update(normalized)
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                tmp_path = self.path.with_suffix(
+                    f"{self.path.suffix}.{os.getpid()}.{threading.get_ident()}."
+                    f"{uuid.uuid4().hex[:8]}.tmp"
+                )
+                with open(tmp_path, "w", encoding="utf-8") as handle:
+                    json.dump(payload, handle, indent=2, ensure_ascii=False)
+                    handle.write("\n")
+                os.replace(tmp_path, self.path)
+                tmp_path = None
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+            warning = f"Failed to persist config settings ({error})."
+            if warning not in self.load_warnings:
+                self.load_warnings.append(warning)
+            return False
+        finally:
+            if tmp_path is not None:
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+        for key, value in normalized.items():
+            setattr(self, key, value)
+        return True
 
     def _load(self):
         if not self.path.exists():

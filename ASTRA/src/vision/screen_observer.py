@@ -92,7 +92,16 @@ class ScreenObserverModule(Module):
     def start(self):
         if not self.enabled:
             return
-        self.enable()
+        try:
+            self.enable()
+        except ScreenObserverError as error:
+            # A stale persisted Eyes setting must never prevent the rest of
+            # ASTRA from starting after a model is removed or changed.
+            self.enabled = False
+            if self.logger:
+                self.logger.warning(
+                    f"Eyes stayed off during startup: {error}"
+                )
 
     def stop(self):
         self.disable()
@@ -104,6 +113,10 @@ class ScreenObserverModule(Module):
     def enable(self):
         self.enabled = True
         if self._thread and self._thread.is_alive():
+            # Reuse a worker that is still finishing an in-flight request. A
+            # preceding disable() set this event; clearing it cancels the stop
+            # request instead of reporting Eyes enabled while the worker exits.
+            self._stop_event.clear()
             return
         try:
             self._validate_vision_model()
@@ -132,7 +145,10 @@ class ScreenObserverModule(Module):
             and thread is not threading.current_thread()
         ):
             thread.join(timeout=max(1.0, self.poll_seconds + 1.0))
-        self._thread = None
+        # A local model request may still be completing. Keep the live thread
+        # reference so an immediate re-enable cannot create a second worker.
+        if not thread or not thread.is_alive():
+            self._thread = None
         if self.logger:
             self.logger.info("Eyes disabled.")
 
@@ -292,6 +308,8 @@ class ScreenObserverModule(Module):
                 self._stop_event.wait(
                     max(10.0, self.poll_seconds)
                 )
+        if self._thread is threading.current_thread():
+            self._thread = None
 
     def _vision_analysis(
         self,

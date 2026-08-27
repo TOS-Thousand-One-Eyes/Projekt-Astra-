@@ -3,6 +3,10 @@ import pytest
 from commands.registry import CommandRegistry
 from conftest import StubModule
 from core.brain import Brain
+from experience.experience_manager import ExperienceManager
+from experience.reflection_manager import ReflectionManager
+from learning.learning_manager import LearningManager
+from learning.self_learning import SelfLearningManager
 from memory.memory_manager import MemoryManager
 from modules.language_module import LanguageModule
 from modules.module import Module
@@ -294,6 +298,28 @@ class TestCommands:
     def test_unknown_message_is_echoed(self, running_brain):
         assert running_brain.receive("something random") == "I heard: something random"
 
+    def test_explicit_correction_trace_uses_previous_brain_response(
+        self, config, memory, tmp_path
+    ):
+        manager = SelfLearningManager(tmp_path / "self-learning", mode="review")
+        brain = Brain(
+            Logger(),
+            config,
+            memory,
+            Modules(Logger()),
+            learning=LearningManager(tmp_path / "learning"),
+            self_learning=manager,
+            experience=ExperienceManager(tmp_path / "experience"),
+            reflections=ReflectionManager(tmp_path / "reflections"),
+        )
+        brain.start()
+
+        previous = brain.receive("something random")
+        brain.receive("self learning correction Answer this differently next time.")
+
+        correction = manager.pending()[0]
+        assert correction["previous_assistant"] == previous
+
     def test_unknown_message_uses_language_module_when_available(self, config, memory):
         class StubClient:
             def ensure_available(self):
@@ -307,9 +333,13 @@ class TestCommands:
         brain = Brain(Logger(), config, memory, modules)
         brain.start()
 
-        assert brain.receive("something random") == "Local reply: something random"
+        response = brain.receive("something random")
+        assert response.startswith(
+            "Local reply: You are ASTRA, a local-first personal AI assistant."
+        )
+        assert response.endswith("User message: something random")
 
-    def test_language_module_receives_memory_context_when_available(self, config, memory):
+    def test_language_module_receives_current_memory_context_when_available(self, config, memory):
         prompts = []
 
         class StubClient:
@@ -330,7 +360,7 @@ class TestCommands:
         assert brain.receive("How should I think about line balancing?") == "context-aware reply"
         assert "Memory context:" in prompts[0]
         assert "[fact:name] name: Erik" in prompts[0]
-        assert "Learned subject: line balancing" in prompts[0]
+        assert "Learned subject: line balancing" not in prompts[0]
         assert "User message: How should I think about line balancing?" in prompts[0]
 
     def test_unknown_message_falls_back_to_echo_when_language_module_runtime_fails(self, config, memory):

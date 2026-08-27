@@ -1,10 +1,33 @@
 import json
+import re
 import threading
+from pathlib import Path
 
 from config.config import Config
 from experience.experience_manager import ExperienceManager
 from memory.context_builder import _tokens
 from utils.ollama_client import OllamaClient
+
+
+def test_release_version_is_consistent_across_runtime_package_and_project_state():
+    root = Path(__file__).resolve().parents[1]
+    runtime_version = json.loads(
+        (root / "config.json").read_text(encoding="utf-8")
+    )["version"]
+    package_match = re.search(
+        r'^version\s*=\s*"([^"]+)"',
+        (root / "pyproject.toml").read_text(encoding="utf-8"),
+        flags=re.MULTILINE,
+    )
+    state_match = re.search(
+        r"^Version:\s*(\S+)",
+        (root / "docs" / "PROJECT_STATE.md").read_text(encoding="utf-8"),
+        flags=re.MULTILINE,
+    )
+
+    assert package_match
+    assert state_match
+    assert runtime_version == package_match.group(1) == state_match.group(1)
 
 
 def test_experience_concurrent_records_are_unique_and_valid(tmp_path):

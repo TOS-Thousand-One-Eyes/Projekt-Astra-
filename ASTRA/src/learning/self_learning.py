@@ -28,6 +28,7 @@ class SelfLearningManager:
         self.training_path = self.root / "training_examples.jsonl"
         self.load_warnings = []
         self._lock = threading.RLock()
+        self._previous_assistant = ""
         self.mode = "review"
         self.set_mode(mode)
 
@@ -45,6 +46,12 @@ class SelfLearningManager:
     def observe_user_message(self, *args, **kwargs):
         """Backward-compatible no-op: implicit language heuristics were removed."""
         return None
+
+    def set_previous_assistant(self, content):
+        """Provide the latest assistant reply for an explicit correction trace."""
+        with self._lock:
+            self._previous_assistant = self._safe_text(content, limit=1600)
+            return self._previous_assistant
 
     def capture_preference(self, content, source="user:explicit"):
         with self._lock:
@@ -77,10 +84,14 @@ class SelfLearningManager:
             text = self._safe_text(content, limit=1200)
             if len(text) < 3:
                 raise ValueError("Correction cannot be empty.")
+            assistant_before = self._safe_text(
+                previous_assistant or self._previous_assistant,
+                limit=1600,
+            )
             candidate = self._upsert_candidate(
                 candidate_type="correction",
                 content=text,
-                previous_assistant=self._safe_text(previous_assistant, limit=1600),
+                previous_assistant=assistant_before,
                 source=source,
                 confidence="high",
                 auto_eligible=True,
@@ -89,6 +100,44 @@ class SelfLearningManager:
             # Corrections can contain factual claims. Even in auto mode they stay
             # review-gated so a single correction cannot poison global guidance.
             return candidate
+
+    def capture_review_candidate(
+        self,
+        candidate_type,
+        content,
+        previous_assistant="",
+        source="conversation_scan",
+        confidence="medium",
+    ):
+        """Queue a model-suggested candidate without ever auto-activating it."""
+        with self._lock:
+            if self.mode == "off":
+                return None
+            normalized_type = str(candidate_type or "").strip().lower()
+            if normalized_type not in {"preference", "correction", "memory_note"}:
+                raise ValueError(
+                    "Conversation candidate type must be preference, correction, or memory_note."
+                )
+            text = self._safe_text(content, limit=1200)
+            if len(text) < 8:
+                raise ValueError("Conversation learning candidate is too short.")
+            previous = self._safe_text(previous_assistant, limit=1600)
+            fingerprint = hashlib_text(text)
+            existing = self._load_list(self.candidates_path, "candidates")
+            if any(
+                item.get("type") == normalized_type
+                and item.get("fingerprint") == fingerprint
+                for item in existing
+            ):
+                return None
+            return self._upsert_candidate(
+                candidate_type=normalized_type,
+                content=text,
+                previous_assistant=previous,
+                source=self._safe_text(source, limit=240),
+                confidence=str(confidence or "medium").strip().lower(),
+                auto_eligible=False,
+            )
 
     def observe_screen(
         self,
@@ -180,6 +229,7 @@ class SelfLearningManager:
             return {
                 "mode": self.mode,
                 "implicit_chat_detection": False,
+                "conversation_scan_review_gated": True,
                 "pending": sum(item.get("status") == "pending" for item in candidates),
                 "approved": sum(item.get("status") == "approved" for item in candidates),
                 "rejected": sum(item.get("status") == "rejected" for item in candidates),
@@ -268,16 +318,26 @@ class SelfLearningManager:
 
     def _guidance_text(self, candidate):
         content = self._safe_text(candidate.get("content", ""), limit=800)
+        reviewed_scan = str(candidate.get("source", "")).startswith(
+            "conversation_scan:"
+        )
         if candidate.get("type") == "preference":
+            if reviewed_scan:
+                return "Reviewed conversation preference: " + content
             return "Explicit user preference: " + content
         if candidate.get("type") == "correction":
             previous = self._safe_text(candidate.get("previous_assistant", ""), limit=600)
+            label = (
+                "Reviewed conversation correction"
+                if reviewed_scan
+                else "Explicit user correction"
+            )
             if previous:
                 return (
-                    "Explicit user correction. Avoid repeating the corrected behavior. "
+                    f"{label}. Avoid repeating the corrected behavior. "
                     f"Feedback: {content}"
                 )
-            return "Explicit user correction: " + content
+            return f"{label}: " + content
         return content
 
     def _mark_candidate_approved(self, candidate_id):

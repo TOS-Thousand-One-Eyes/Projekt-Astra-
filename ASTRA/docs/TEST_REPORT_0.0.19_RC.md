@@ -1,9 +1,12 @@
 # ASTRA v0.0.19 RC — Test Report
 
-Status: **review candidate; not pushed**  
-Base branch: `DEV`  
-Base DEV commit audited: `3cb8f2fdc6618803d73258279a823973f1aff17d`  
-Runtime version intentionally remains `0.0.18` until approval.
+Status: **review candidate; not pushed**
+
+Base branch: `DEV-need-check`
+
+Base commit audited: `a2203c1`
+
+Runtime/package version: `0.0.19`.
 
 ## Final audit checks in this environment
 
@@ -17,20 +20,18 @@ Runtime version intentionally remains `0.0.18` until approval.
 - Review ZIP integrity: checked during packaging.
 - GitHub writes during audit: **none**.
 
-## Important limitation
+## Local/live limitation
 
-This environment could read the connected GitHub `DEV` tree/file contents for
-compatibility checks, but could not materialize a complete repository checkout.
-Therefore the **entire existing upstream DEV test suite has not been run here**.
-
-That is deliberately a release gate on the real Windows checkout:
+The complete repository checkout and deterministic suite now run successfully in
+this environment. Real Windows desktop capture and the user's local Ollama model
+still require a live-machine review:
 
 ```powershell
 python -m pip install -e ".[dev]"
 python -m pytest -q
 ```
 
-Do not push if that suite is red.
+Do not push if that Windows recheck is red.
 
 ## Live checks already learned from this review cycle
 
@@ -87,3 +88,16 @@ context/prompt/validator contract is internally consistent.
 Focused `tests/test_learning.py` pass after the live Python-source fix: **38/38 PASS**.
 New regressions cover incidental long-entry rejection, near-duplicate memory-source
 deduplication, and stale-memory refresh while preserving explicit evidence.
+
+## Full repository integration recheck
+
+- Full local suite from the real branch checkout: **449/449 PASS**.
+- The six stale DEV compatibility assertions were aligned with the documented v4
+  contracts: stable ASTRA system prompt, LearningManager-only promoted knowledge,
+  and the compact 6/7-case evaluator instead of the retired 13-case matrix.
+- Added regression coverage for persistent self-learning/Eyes settings, correction
+  traces retaining the prior ASTRA response, text-only vision rejection, graceful
+  Eyes startup degradation, stuck-worker re-enable safety, atomic shared config
+  writes, and the token-free Slack changelog formatter.
+- Production and test Python compilation: PASS.
+- `git diff --check`: PASS.
