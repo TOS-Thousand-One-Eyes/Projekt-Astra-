@@ -33,6 +33,22 @@ def push_event():
     }
 
 
+def release_notes(version="0.0.20"):
+    return {
+        "version": version,
+        "source": f"CHANGELOG_PENDING_{version}.md",
+        "sections": [
+            {
+                "title": "Learning",
+                "items": [
+                    {"text": "Added self-learning health checks."},
+                    {"text": "Fixed stale guidance links."},
+                ],
+            }
+        ],
+    }
+
+
 def test_build_payload_summarizes_push_without_an_ai_call():
     payload = MODULE.build_payload(push_event())
     rendered = json.dumps(payload, ensure_ascii=False)
@@ -42,6 +58,73 @@ def test_build_payload_summarizes_push_without_an_ai_call():
     assert "Finish Eyes lifecycle" in rendered
     assert "src/vision (1)" in rendered
     assert "tests (1)" in rendered
+
+
+def test_build_payload_leads_with_versioned_release_notes():
+    payload = MODULE.build_payload(push_event(), release=release_notes())
+    rendered = json.dumps(payload, ensure_ascii=False)
+
+    assert "ASTRA v0.0.20 changelog" in rendered
+    assert "What's new in v0.0.20" in rendered
+    assert "Added self-learning health checks" in rendered
+    assert "Fixed stale guidance links" in rendered
+    assert payload["text"].startswith("ASTRA v0.0.20:")
+
+
+def test_load_release_notes_reads_matching_versioned_changelog(tmp_path):
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "config.json").write_text(
+        json.dumps({"version": "0.0.21"}),
+        encoding="utf-8",
+    )
+    (tmp_path / "docs" / "CHANGELOG_PENDING_0.0.21.md").write_text(
+        """# v0.0.21
+
+## Learning Health Guard
+
+- Added integrity checks that continue
+  across a wrapped Markdown line.
+
+## Verification
+
+- 482 tests passed.
+""",
+        encoding="utf-8",
+    )
+
+    release = MODULE.load_release_notes(tmp_path)
+
+    assert release["version"] == "0.0.21"
+    assert release["source"] == "CHANGELOG_PENDING_0.0.21.md"
+    assert release["sections"] == [
+        {
+            "title": "Learning Health Guard",
+            "items": [
+                {
+                    "text": (
+                        "Added integrity checks that continue across a wrapped "
+                        "Markdown line."
+                    )
+                }
+            ],
+        }
+    ]
+
+
+def test_release_notes_are_redacted_and_cannot_create_slack_mentions():
+    release = release_notes()
+    release["sections"][0]["items"][0]["text"] = (
+        "Notify <!channel> with sk-" + "a" * 40
+    )
+
+    rendered = json.dumps(
+        MODULE.build_payload(push_event(), release=release),
+        ensure_ascii=False,
+    )
+
+    assert "<!channel>" not in rendered
+    assert "sk-" + "a" * 40 not in rendered
+    assert "REDACTED_SECRET" in rendered
 
 
 def test_build_payload_redacts_secret_like_commit_text():

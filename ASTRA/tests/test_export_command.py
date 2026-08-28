@@ -43,6 +43,17 @@ def test_export_ignores_unrelated_messages(config, memory, tmp_path):
     assert not export_dir.exists()
 
 
+def test_default_export_directory_is_inside_active_memory_profile(config, memory):
+    export = ExportCommand(config, memory)
+
+    response = export.handle("export", "export")
+
+    expected = memory.long_memory.path.parent / "exports"
+    assert export.export_dir == expected
+    assert str(expected) in response
+    assert len(list(expected.glob("astra_export_*.json"))) == 1
+
+
 def test_two_exports_do_not_overwrite_each_other(config, memory, tmp_path):
     export = ExportCommand(config, memory, export_dir=tmp_path / "exports")
     export.handle("export", "export")

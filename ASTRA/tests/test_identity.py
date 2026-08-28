@@ -121,6 +121,17 @@ def test_corrupt_identity_store_fails_closed_without_reset(tmp_path):
     assert path.read_text(encoding="utf-8") == "{broken"
 
 
+def test_identity_store_rejects_excessive_pin_work_factor(tmp_path):
+    manager = IdentityManager(data_dir=tmp_path)
+    manager.initialize_pin("erik", "2468")
+    payload = json.loads(manager.path.read_text(encoding="utf-8"))
+    payload["profiles"][0]["pin"]["iterations"] = 1_000_000_000
+    manager.path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(IdentityStoreError, match="PIN record"):
+        IdentityManager(data_dir=tmp_path)
+
+
 def test_legacy_runtime_data_is_copied_to_erik_and_original_is_retained(tmp_path):
     (tmp_path / "long_memory.json").write_text('[{"entry":"legacy"}]', encoding="utf-8")
     old_guidance = tmp_path / "self_learning" / "guidance.json"

@@ -98,6 +98,96 @@ def test_rejecting_candidate_deactivates_linked_guidance(tmp_path):
     assert manager.guidance() == []
 
 
+def test_health_reports_a_clean_mixed_learning_store(tmp_path):
+    manager = SelfLearningManager(tmp_path, mode="auto")
+    manager.capture_preference("Keep answers concise.")
+    manager.capture_correction("Verify paths before using them.")
+
+    report = manager.health()
+
+    assert report["healthy"] is True
+    assert report["candidates"] == 2
+    assert report["pending"] == 1
+    assert report["usable_guidance"] == 1
+    assert report["blocked_guidance"] == 0
+    assert report["training_traces"] == 1
+    assert report["issues"] == []
+
+
+def test_health_blocks_guidance_linked_to_rejected_candidate(tmp_path):
+    manager = SelfLearningManager(tmp_path, mode="auto")
+    candidate = manager.capture_preference("Keep answers concise.")
+    candidates = json.loads(manager.candidates_path.read_text(encoding="utf-8"))
+    candidates[0]["status"] = "rejected"
+    manager.candidates_path.write_text(json.dumps(candidates), encoding="utf-8")
+
+    assert manager.guidance() == []
+    assert "linked candidate is rejected" in manager.integrity_warnings[0]
+    report = manager.health()
+
+    assert report["healthy"] is False
+    assert report["blocked_guidance"] == 1
+    assert any(item["code"] == "blocked_active_guidance" for item in report["issues"])
+
+
+def test_health_warns_about_stale_pending_candidate(tmp_path):
+    manager = SelfLearningManager(tmp_path, mode="review")
+    manager.capture_preference("Keep answers concise.")
+    candidates = json.loads(manager.candidates_path.read_text(encoding="utf-8"))
+    candidates[0]["updated"] = "2026-01-01T00:00:00"
+    manager.candidates_path.write_text(json.dumps(candidates), encoding="utf-8")
+
+    report = manager.health(now="2026-03-01T00:00:00Z")
+
+    assert report["healthy"] is True
+    assert report["warnings"] == 1
+    assert report["issues"][0]["code"] == "stale_pending_candidate"
+
+
+def test_recaptured_rejected_preference_relinks_reactivated_guidance(tmp_path):
+    manager = SelfLearningManager(tmp_path, mode="auto")
+    rejected = manager.capture_preference("Keep answers concise.")
+    manager.reject(rejected["id"])
+
+    replacement = manager.capture_preference("Keep answers concise.")
+    guidance = manager.guidance()
+
+    assert replacement["id"] != rejected["id"]
+    assert guidance[0]["candidate_id"] == replacement["id"]
+    assert manager.health()["healthy"] is True
+
+
+def test_health_detects_invalid_training_trace(tmp_path):
+    manager = SelfLearningManager(tmp_path, mode="review")
+    manager.training_path.write_text("{broken\n", encoding="utf-8")
+
+    report = manager.health()
+
+    assert report["healthy"] is False
+    assert report["training_traces"] == 1
+    assert any(item["code"] == "invalid_training_trace" for item in report["issues"])
+
+
+def test_health_and_runtime_choose_newest_usable_duplicate_guidance(tmp_path):
+    manager = SelfLearningManager(tmp_path, mode="auto")
+    manager.capture_preference("Keep answers concise.")
+    guidance = json.loads(manager.guidance_path.read_text(encoding="utf-8"))
+    broken = dict(guidance[0])
+    broken["id"] = "G-broken"
+    broken["candidate_id"] = "SL-missing"
+    broken["updated"] = "9999-01-01T00:00:00"
+    guidance.append(broken)
+    manager.guidance_path.write_text(json.dumps(guidance), encoding="utf-8")
+
+    usable = manager.guidance(limit=10)
+    report = manager.health()
+
+    assert len(usable) == 1
+    assert usable[0]["id"] != "G-broken"
+    assert report["usable_guidance"] == 1
+    assert report["blocked_guidance"] == 1
+
+
 def test_screen_observation_never_auto_activates_global_guidance(tmp_path):
     manager = SelfLearningManager(tmp_path, mode="auto")
     for _ in range(3):
@@ -179,6 +269,21 @@ def test_self_learning_mode_command_persists_and_guidance_is_reviewable(tmp_path
     assert json.loads(config_path.read_text(encoding="utf-8"))["self_learning_mode"] == "auto"
     assert "Captured and activated preference" in captured
     assert "Keep answers concise" in guidance
+
+
+def test_self_learning_health_command_reports_integrity(tmp_path):
+    manager = SelfLearningManager(tmp_path / "runtime", mode="auto")
+    manager.capture_preference("Keep answers concise.")
+    command = LearningCommand(
+        MemoryManager(data_dir=tmp_path / "memory"),
+        self_learning=manager,
+    )
+
+    response = command.handle("self learning health", "self learning health")
+
+    assert "Self-learning health: healthy" in response
+    assert "1 usable, 0 blocked" in response
+    assert "No learning-integrity issues detected" in response
 
 
 def test_conversation_scan_queues_preference_and_memory_note_for_review(tmp_path):

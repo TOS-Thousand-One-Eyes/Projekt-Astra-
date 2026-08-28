@@ -7,20 +7,20 @@ from pathlib import Path
 
 from commands.base import Command
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-EXPORT_DIR = DATA_DIR / "exports"
-
-
 class ExportCommand(Command):
 
     TRIGGERS = ("export",)
     help_text = "- export - save a copy of your memory and config to a file"
 
-    def __init__(self, config, memory, export_dir=EXPORT_DIR, logger=None):
+    def __init__(self, config, memory, export_dir=None, logger=None):
         super().__init__(logger)
         self.config = config
         self.memory = memory
-        self.export_dir = Path(export_dir)
+        self.export_dir = (
+            Path(export_dir)
+            if export_dir is not None
+            else Path(memory.long_memory.path).parent / "exports"
+        )
 
     def handle(self, message, normalized):
         if normalized not in self.TRIGGERS:

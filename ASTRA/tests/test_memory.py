@@ -1,3 +1,5 @@
+import threading
+
 from memory.facts import Facts
 from memory.context_builder import build_model_prompt
 from memory.long_memory import LongMemory
@@ -367,6 +369,58 @@ def test_save_leaves_no_tmp_files_behind(tmp_path):
 
     leftovers = [item.name for item in tmp_path.iterdir() if ".tmp" in item.name]
     assert leftovers == []
+
+
+def test_parallel_long_memory_writes_are_serialized_and_persisted(tmp_path):
+    path = tmp_path / "long_memory.json"
+    memory = LongMemory(path)
+    barrier = threading.Barrier(17)
+    errors = []
+
+    def remember(index):
+        try:
+            barrier.wait()
+            memory.remember(f"entry-{index}")
+        except Exception as error:
+            errors.append(error)
+
+    threads = [threading.Thread(target=remember, args=(index,)) for index in range(16)]
+    for thread in threads:
+        thread.start()
+    barrier.wait()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert len(memory.recall()) == 16
+    assert len(LongMemory(path).recall()) == 16
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_parallel_fact_writes_are_serialized_and_persisted(tmp_path):
+    path = tmp_path / "facts.json"
+    facts = Facts(path)
+    barrier = threading.Barrier(17)
+    errors = []
+
+    def learn(index):
+        try:
+            barrier.wait()
+            facts.learn(f"key-{index}", f"value-{index}")
+        except Exception as error:
+            errors.append(error)
+
+    threads = [threading.Thread(target=learn, args=(index,)) for index in range(16)]
+    for thread in threads:
+        thread.start()
+    barrier.wait()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert len(facts.all()) == 16
+    assert len(Facts(path).all()) == 16
+    assert list(tmp_path.glob("*.tmp")) == []
 
 
 def test_facts_load_normalizes_hand_edited_keys(tmp_path):

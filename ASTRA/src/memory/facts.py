@@ -1,5 +1,7 @@
 import json
 import os
+import threading
+import uuid
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
@@ -12,45 +14,64 @@ class Facts:
         self.path = Path(path)
         self.facts = {}
         self.load_warning = None
+        self._lock = threading.RLock()
         self.load()
 
     def learn(self, key, value):
-        self.facts[key.strip().lower()] = value.strip()
-        self.save()
+        with self._lock:
+            self.facts[key.strip().lower()] = value.strip()
+            self.save()
 
     def get(self, key):
-        return self.facts.get(key.strip().lower())
+        with self._lock:
+            return self.facts.get(key.strip().lower())
 
     def all(self):
-        return self.facts
+        with self._lock:
+            return dict(self.facts)
 
     def save(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        # PID-unique tmp name so two Astra processes saving at once can't
-        # interleave writes into the same tmp file before os.replace runs.
-        tmp_path = self.path.with_suffix(f"{self.path.suffix}.{os.getpid()}.tmp")
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(self.facts, f, indent=2, ensure_ascii=False)
-        os.replace(tmp_path, self.path)
+        with self._lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = self.path.with_suffix(
+                f"{self.path.suffix}.{os.getpid()}.{threading.get_ident()}."
+                f"{uuid.uuid4().hex[:8]}.tmp"
+            )
+            try:
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    json.dump(self.facts, f, indent=2, ensure_ascii=False)
+                os.replace(tmp_path, self.path)
+            finally:
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     def load(self):
-        if not self.path.exists():
-            self.facts = {}
-            return
-        try:
-            # utf-8-sig: a hand-edited file saved with a BOM must not reset
-            # the user's facts to empty.
-            with open(self.path, "r", encoding="utf-8-sig") as f:
-                loaded = json.load(f)
-        except (json.JSONDecodeError, UnicodeDecodeError, OSError) as error:
-            self.facts = {}
-            self.load_warning = f"{self.path.name} could not be loaded ({error}); starting with empty facts."
-            return
-        if not isinstance(loaded, dict):
-            self.facts = {}
-            self.load_warning = f"{self.path.name} does not contain a JSON object; starting with empty facts."
-            return
-        self.facts = self._normalized_keys(loaded)
+        with self._lock:
+            if not self.path.exists():
+                self.facts = {}
+                return
+            try:
+                # utf-8-sig: a hand-edited file saved with a BOM must not reset
+                # the user's facts to empty.
+                with open(self.path, "r", encoding="utf-8-sig") as f:
+                    loaded = json.load(f)
+            except (json.JSONDecodeError, UnicodeDecodeError, OSError) as error:
+                self.facts = {}
+                self.load_warning = (
+                    f"{self.path.name} could not be loaded ({error}); "
+                    "starting with empty facts."
+                )
+                return
+            if not isinstance(loaded, dict):
+                self.facts = {}
+                self.load_warning = (
+                    f"{self.path.name} does not contain a JSON object; "
+                    "starting with empty facts."
+                )
+                return
+            self.facts = self._normalized_keys(loaded)
 
     def _normalized_keys(self, loaded):
         # learn() stores keys stripped and lowercased and get() looks them up

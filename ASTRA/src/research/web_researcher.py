@@ -123,8 +123,7 @@ def search_wikipedia(query, max_results=DEFAULT_MAX_RESULTS, opener=None):
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     open_url = opener or urllib.request.urlopen
     try:
-        response = open_url(request, timeout=10)
-        raw = response.read(100_000)
+        raw = read_bounded_response(open_url, request, 100_000)
     except Exception as error:
         raise ResearchError(f"Could not search Wikipedia fallback: {error}") from error
     try:
@@ -165,8 +164,7 @@ def search_wikipedia_fulltext(query, max_results=DEFAULT_MAX_RESULTS, opener=Non
         url = WIKIPEDIA_SEARCH_URL + "?" + urllib.parse.urlencode(params)
         request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
         try:
-            response = open_url(request, timeout=10)
-            raw = response.read(100_000)
+            raw = read_bounded_response(open_url, request, 100_000)
         except Exception as error:
             raise ResearchError(f"Could not search Wikipedia full-text fallback: {error}") from error
         try:
@@ -190,6 +188,16 @@ def search_wikipedia_fulltext(query, max_results=DEFAULT_MAX_RESULTS, opener=Non
                 results[url] = current
     ranked = sorted(results.values(), key=lambda item: (-item.pop("score"), item["title"]))
     return ranked[:limit]
+
+
+def read_bounded_response(open_url, request, limit):
+    response = open_url(request, timeout=10)
+    try:
+        return response.read(limit)
+    finally:
+        close = getattr(response, "close", None)
+        if callable(close):
+            close()
 
 
 class SearchResultParser(HTMLParser):

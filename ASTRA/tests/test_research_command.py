@@ -33,7 +33,11 @@ def test_web_researcher_fetches_bounded_sources_and_records_failures():
 
 
 def test_search_wikipedia_parses_opensearch_response():
+    responses = []
+
     class StubResponse:
+        closed = False
+
         def read(self, limit):
             return (
                 b'["line balancing",["Line balancing"],'
@@ -41,10 +45,15 @@ def test_search_wikipedia_parses_opensearch_response():
                 b'["https://en.wikipedia.org/wiki/Assembly_line"]]'
             )
 
+        def close(self):
+            self.closed = True
+
     def opener(request, timeout):
         assert "w/api.php" in request.full_url
         assert timeout == 10
-        return StubResponse()
+        response = StubResponse()
+        responses.append(response)
+        return response
 
     results = search_wikipedia("line balancing", max_results=1, opener=opener)
 
@@ -55,20 +64,30 @@ def test_search_wikipedia_parses_opensearch_response():
             "snippet": "Balancing production work across stations.",
         }
     ]
+    assert responses[0].closed is True
 
 
 def test_search_wikipedia_fulltext_parses_query_search_response():
+    responses = []
+
     class StubResponse:
+        closed = False
+
         def read(self, limit):
             return (
                 b'{"query":{"search":[{"title":"Assembly line",'
                 b'"snippet":"A <span class=\\"searchmatch\\">manufacturing</span> process."}]}}'
             )
 
+        def close(self):
+            self.closed = True
+
     def opener(request, timeout):
         assert "list=search" in request.full_url
         assert timeout == 10
-        return StubResponse()
+        response = StubResponse()
+        responses.append(response)
+        return response
 
     results = search_wikipedia_fulltext("line balancing manufacturing", max_results=1, opener=opener)
 
@@ -79,6 +98,7 @@ def test_search_wikipedia_fulltext_parses_query_search_response():
             "snippet": "A manufacturing process.",
         }
     ]
+    assert responses and all(response.closed for response in responses)
 
 
 def test_research_command_summarizes_stubbed_sources():

@@ -15,6 +15,7 @@ from pathlib import Path
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 IDENTITY_SCHEMA = "astra-identity/profiles/v1"
 PBKDF2_ITERATIONS = 310_000
+MAX_PBKDF2_ITERATIONS = 2_000_000
 DEFAULT_PROFILES = (
     ("erik", "Erik"),
     ("petr", "Petr"),
@@ -292,6 +293,8 @@ class IdentityManager:
 
     @staticmethod
     def _derive_pin(pin, record):
+        if not IdentityManager._valid_pin_record(record):
+            raise IdentityStoreError("Stored PIN metadata is invalid.")
         try:
             salt = bytes.fromhex(str(record["salt"]))
             iterations = int(record["iterations"])
@@ -316,7 +319,11 @@ class IdentityManager:
             digest = bytes.fromhex(str(record.get("hash")))
         except (TypeError, ValueError):
             return False
-        return iterations >= 100_000 and len(salt) >= 16 and len(digest) == 32
+        return (
+            100_000 <= iterations <= MAX_PBKDF2_ITERATIONS
+            and len(salt) >= 16
+            and len(digest) == 32
+        )
 
     def _save_payload(self):
         self._atomic_json_write(self.path, self._payload)

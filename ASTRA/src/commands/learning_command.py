@@ -21,6 +21,7 @@ class LearningCommand(Command):
         "- learning approve <topic> - approve a currently passing eval\n"
         "- learning promote <topic> - promote approved learning into long memory\n"
         "- self learning status / review / guidance - inspect continual-learning state\n"
+        "- self learning health - audit learning integrity and prompt capacity\n"
         "- self learning scan - propose review-gated learning from recent conversation\n"
         "- self learning mode <off|review|auto> - set continual-learning mode\n"
         "- self learning preference <text> - capture an explicit persistent preference\n"
@@ -89,6 +90,8 @@ class LearningCommand(Command):
 
         if normalized == "self learning status":
             return self._self_status()
+        if normalized == "self learning health":
+            return self._self_health()
         if normalized == "self learning review":
             return self._self_review()
         if normalized == "self learning guidance":
@@ -477,6 +480,38 @@ class LearningCommand(Command):
             f"- active guidance: {status['active_guidance']}\n"
             f"- training traces: {status['training_traces']}"
         )
+
+    def _self_health(self):
+        if not self.self_learning:
+            return "Self-learning manager is not configured."
+        report = self.self_learning.health()
+        label = "healthy" if report["healthy"] else "attention required"
+        lines = [
+            f"Self-learning health: {label}",
+            f"- candidates: {report['candidates']} ({report['pending']} pending)",
+            (
+                "- active guidance: "
+                f"{report['usable_guidance']} usable, "
+                f"{report['blocked_guidance']} blocked, "
+                f"prompt limit {report['prompt_limit']}"
+            ),
+            f"- training traces: {report['training_traces']}",
+            f"- issues: {report['errors']} error(s), {report['warnings']} warning(s)",
+        ]
+        if not report["issues"]:
+            lines.append("No learning-integrity issues detected.")
+            return "\n".join(lines)
+
+        lines.append("Findings:")
+        for item in report["issues"][:20]:
+            lines.append(
+                f"- [{item['severity']}] {item['code']} "
+                f"({item['item_id']}): {item['message']}"
+            )
+        remaining = len(report["issues"]) - 20
+        if remaining > 0:
+            lines.append(f"- ... and {remaining} more finding(s).")
+        return "\n".join(lines)
 
     def _self_review(self):
         if not self.self_learning:

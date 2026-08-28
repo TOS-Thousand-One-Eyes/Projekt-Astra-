@@ -84,6 +84,7 @@ learning run-eval <topic>
 learning approve <topic>
 learning promote <topic>
 self learning status
+self learning health
 self learning review
 self learning guidance
 self learning scan
@@ -115,6 +116,28 @@ memory notes. The transcript is treated as untrusted data, secrets and transient
 UI status are excluded, and every proposal remains pending even in `auto` mode.
 Approve or reject proposals through the normal `self learning review` flow.
 The scan makes no web requests and never changes model weights.
+`self learning health` performs a read-only integrity audit. It reports stale
+pending candidates, damaged or duplicate records, broken candidate/guidance
+links, malformed correction traces, and active guidance that no longer fits in
+the eight-item model-prompt window. Guidance linked to missing, rejected, or
+otherwise inconsistent candidates is blocked before it can enter a prompt.
+
+## Profile backup commands
+
+ASTRA can create a local, verified snapshot of the active profile:
+
+```
+backup create [label]
+backup list
+backup verify <filename|latest>
+```
+
+The ZIP contains long memory, facts, learning subjects, self-learning data,
+experience, actions, and reminders for only the active Erik/Petr profile. Every
+file is recorded in `manifest.json` with its size and SHA-256 hash, and a new
+backup is verified before ASTRA accepts it. Backups stay under the active
+profile's `backups` directory and must be kept private. Restore remains manual
+so a chat command cannot overwrite live memory.
 
 ## Research commands
 

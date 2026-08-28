@@ -10,10 +10,17 @@ from urllib.parse import urlparse
 
 MAX_COMMITS = 12
 MAX_FILES = 40
+MAX_RELEASE_ITEMS = 30
 MAX_SECTION_CHARS = 2900
+VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$")
+EXCLUDED_CHANGELOG_SECTIONS = {
+    "verification",
+    "manual checks",
+    "manual checks still required",
+}
 
 
-def build_payload(event):
+def build_payload(event, release=None):
     repository = event.get("repository") or {}
     repo_name = clean(repository.get("full_name") or "unknown repository", 180)
     repo_url = repository.get("html_url") or ""
@@ -52,32 +59,190 @@ def build_payload(event):
     summary = (
         f"*Repository:* {title_repo}\n"
         f"*Branch:* `{branch or 'unknown'}`   *Pushed by:* {pusher}\n"
-        f"*Commits:* {len(commits)}   *Changed files:* {len(changed_files)}\n"
+        + (
+            f"*Version:* `{clean(release['version'], 80)}`\n"
+            if release and release.get("version")
+            else ""
+        )
+        + f"*Commits:* {len(commits)}   *Changed files:* {len(changed_files)}\n"
         f"*Components:* {component_text}"
     )
-    details = "\n".join(commit_lines)
-    if file_preview:
-        details += f"\n\n*Files:* {file_preview}"
+    release_blocks = format_release_blocks(release)
+    if release_blocks:
+        detail_blocks = release_blocks
+    else:
+        details = "\n".join(commit_lines)
+        if file_preview:
+            details += f"\n\n*Files:* {file_preview}"
+        detail_blocks = [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": details[:MAX_SECTION_CHARS],
+                },
+            }
+        ]
     if compare_url:
-        details += f"\n\n<{compare_url}|Open GitHub comparison>"
-    details = details[:MAX_SECTION_CHARS]
+        detail_blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"<{compare_url}|Open GitHub comparison>",
+                },
+            }
+        )
 
-    fallback = clean(
-        f"ASTRA changelog: {repo_name} {branch or 'unknown'} — "
-        f"{len(commits)} commit(s), {len(changed_files)} changed file(s).",
-        500,
-    )
+    version = clean((release or {}).get("version", ""), 80)
+    release_items = [
+        item.get("text", "")
+        for section in (release or {}).get("sections", [])
+        for item in section.get("items", [])
+        if item.get("text")
+    ]
+    if version and release_items:
+        fallback = clean(f"ASTRA v{version}: {release_items[0]}", 500)
+    else:
+        fallback = clean(
+            f"ASTRA changelog: {repo_name} {branch or 'unknown'} — "
+            f"{len(commits)} commit(s), {len(changed_files)} changed file(s).",
+            500,
+        )
+    header = f"ASTRA v{version} changelog" if version else "ASTRA changelog"
+    blocks = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": header[:150]},
+        },
+        {"type": "section", "text": {"type": "mrkdwn", "text": summary}},
+    ]
+    blocks.extend(detail_blocks)
     return {
         "text": fallback,
-        "blocks": [
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": "ASTRA changelog"},
-            },
-            {"type": "section", "text": {"type": "mrkdwn", "text": summary}},
-            {"type": "section", "text": {"type": "mrkdwn", "text": details}},
-        ],
+        "blocks": blocks,
     }
+
+
+def load_release_notes(project_root):
+    root = Path(project_root)
+    config_path = root / "config.json"
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not load the ASTRA version from config.json: {error}") from error
+    version = str(config.get("version", "")).strip() if isinstance(config, dict) else ""
+    if not VERSION_PATTERN.fullmatch(version):
+        raise ValueError(f"ASTRA config.json has an invalid version: {version!r}.")
+
+    candidates = (
+        root / "docs" / f"CHANGELOG_PENDING_{version}.md",
+        root / "docs" / f"CHANGELOG_{version}.md",
+    )
+    changelog_path = next((path for path in candidates if path.is_file()), None)
+    if changelog_path is None:
+        return {"version": version, "sections": [], "source": None}
+    try:
+        markdown = changelog_path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as error:
+        raise ValueError(f"Could not read {changelog_path.name}: {error}") from error
+    return {
+        "version": version,
+        "sections": parse_release_sections(markdown),
+        "source": changelog_path.name,
+    }
+
+
+def parse_release_sections(markdown):
+    sections = []
+    current = None
+    current_item = None
+    for raw_line in str(markdown or "").splitlines():
+        stripped = raw_line.strip()
+        if stripped.startswith("## "):
+            title = strip_markdown(stripped[3:])
+            if title.casefold() in EXCLUDED_CHANGELOG_SECTIONS:
+                current = None
+            else:
+                current = {"title": title, "items": []}
+                sections.append(current)
+            current_item = None
+            continue
+        if stripped.startswith("# "):
+            current = None
+            current_item = None
+            continue
+        if current is None:
+            continue
+        if stripped.startswith("- "):
+            text = strip_markdown(stripped[2:])
+            if text:
+                current_item = {"text": text}
+                current["items"].append(current_item)
+            continue
+        if current_item and stripped and not stripped.startswith("#"):
+            current_item["text"] += " " + strip_markdown(stripped)
+
+    return [section for section in sections if section["items"]]
+
+
+def format_release_blocks(release):
+    if not release or not release.get("sections"):
+        return []
+    blocks = []
+    remaining = MAX_RELEASE_ITEMS
+    first = True
+    for section in release["sections"]:
+        if remaining <= 0:
+            break
+        title = clean(section.get("title", "Changes"), 160)
+        items = section.get("items", [])[:remaining]
+        if not items:
+            continue
+        prefix = (
+            f"*What's new in v{clean(release.get('version', ''), 80)}:*\n\n"
+            if first
+            else ""
+        )
+        lines = [prefix + f"*{title}*"]
+        for item in items:
+            line = f"• {clean(item.get('text', ''), 500)}"
+            candidate = "\n".join(lines + [line])
+            if len(candidate) > MAX_SECTION_CHARS:
+                blocks.append(slack_section("\n".join(lines)))
+                lines = [f"*{title} (continued)*", line]
+            else:
+                lines.append(line)
+        remaining -= len(items)
+        blocks.append(slack_section("\n".join(lines)))
+        first = False
+    total_items = sum(len(section.get("items", [])) for section in release["sections"])
+    if total_items > MAX_RELEASE_ITEMS:
+        blocks.append(
+            slack_section(
+                f"• …and {total_items - MAX_RELEASE_ITEMS} more change(s)"
+            )
+        )
+    return blocks
+
+
+def format_release_notes(release):
+    return "\n\n".join(
+        block["text"]["text"]
+        for block in format_release_blocks(release)
+    )
+
+
+def slack_section(text):
+    return {
+        "type": "section",
+        "text": {"type": "mrkdwn", "text": str(text)[:MAX_SECTION_CHARS]},
+    }
+
+
+def strip_markdown(value):
+    text = " ".join(str(value or "").split())
+    return re.sub(r"[*_`]+", "", text).strip()
 
 
 def summarize_components(paths):
@@ -161,7 +326,9 @@ def main():
 
     try:
         event = json.loads(event_path.read_text(encoding="utf-8"))
-        post_payload(webhook, build_payload(event))
+        project_root = Path(__file__).resolve().parents[1]
+        release = load_release_notes(project_root)
+        post_payload(webhook, build_payload(event, release=release))
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as error:
         print(f"Slack changelog failed: {error}", file=sys.stderr)
         return 1

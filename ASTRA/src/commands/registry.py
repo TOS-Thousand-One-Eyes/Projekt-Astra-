@@ -1,5 +1,6 @@
 from commands.base import DispatchResult, looks_like_shell_command, normalize
 from commands.action_command import ActionCommand
+from commands.backup_command import BackupCommand
 from commands.code_command import CodeCommand
 from commands.diagnostics_command import DiagnosticsCommand
 from commands.exit_command import ExitCommand
@@ -144,6 +145,12 @@ def build_default_registry(
     greeting = GreetingCommand(config, memory, logger=logger, identity=identity)
     farewell = ExitCommand(config, logger=logger)
     export = ExportCommand(config, memory, logger=logger)
+    backup = BackupCommand(
+        config,
+        memory,
+        identity=identity,
+        logger=logger,
+    )
     experience_command = ExperienceCommand(
         experience=experience,
         logger=logger,
@@ -251,6 +258,7 @@ def build_default_registry(
         greeting,
         farewell,
         export,
+        backup,
         diagnostics,
     ]
 
@@ -281,6 +289,7 @@ def build_default_registry(
         greeting,
         farewell,
         export,
+        backup,
         diagnostics,
     ]
 

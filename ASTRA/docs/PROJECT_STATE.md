@@ -1,12 +1,12 @@
 # ASTRA project state
 
-Version: 0.0.20
+Version: 0.0.21
 
 Branch under review: `DEV-need-check`
 
-Base commit: `a2203c1`
+Remote base commit: `9834f15`
 
-Status: review candidate; not pushed or released
+Status: `DEV-need-check` review candidate; not released
 
 ## Product direction
 
@@ -23,7 +23,7 @@ commands or approval gates.
   self-learning candidates/guidance, reflections, reminders, and actions.
 - Ollama language fallback is optional and model calls are serialized so a shared
   text/vision model is never called concurrently by chat and Eyes.
-- Runtime/package/config version values are synchronized at `0.0.20`.
+- Runtime/package/config version values are synchronized at `0.0.21`.
 - Local profiles `Erik` and `Petr` authenticate with separately salted PIN
   hashes and use isolated persistent runtime directories.
 
@@ -56,6 +56,9 @@ normal prompts; current promoted LearningManager content is authoritative.
 - Mode changes persist atomically to `config.json`.
 - `self learning scan` uses the active local model to propose review-gated
   preferences, corrections, and personal memory notes from recent conversation.
+- `self learning health` audits candidate, guidance, and correction-trace
+  integrity without modifying data. Inconsistent active guidance is blocked
+  before model-prompt injection.
 
 This is continual memory/RAG learning, not autonomous neural-weight training.
 Training JSONL is preparation for a later reviewed fine-tune/LoRA workflow.
@@ -87,11 +90,28 @@ uses a process/thread/UUID-unique temporary file, serializes writes across Confi
 instances, preserves unrelated settings, and refuses to overwrite malformed JSON.
 Model, GUI theme, self-learning mode, and Eyes state use this path.
 
+Long memory and facts now use locked read/modify/write operations plus
+process/thread/UUID-unique temporary paths. Concurrent GUI/background writes no
+longer collide on the same temporary file.
+
+## Profile backups
+
+- `backup create [label]` creates a ZIP from the active profile's persistent
+  memory, learning, experience, action, and reminder data.
+- Each archive has a versioned manifest, per-file size/SHA-256 records, a 128 MiB
+  safety limit, and immediate post-create verification.
+- `backup list` and `backup verify <file|latest>` are read-only.
+- Backups and legacy JSON exports live inside the active profile directory, so
+  Erik and Petr do not share personal export artifacts.
+- Restore remains manual to prevent accidental live-memory replacement from chat.
+
 ## Identity and privacy
 
 - Profile selection is explicit; ASTRA never guesses identity from IP, webcam,
   network, or device metadata.
 - PINs are PBKDF2-SHA256 hashed with independent random salts and never enter chat.
+- Corrupt PIN metadata fails closed, including an excessive work factor that
+  could otherwise stall authentication.
 - Personal stores live under `data/users/erik` or `data/users/petr`.
 - Pre-profile data is copied to Erik once without deleting the recoverable originals.
 - The GUI hides chat and stops Brain/Eyes when locked or switching users.
@@ -105,19 +125,23 @@ Model, GUI theme, self-learning mode, and Eyes state use this path.
 - Repository-root `.github/workflows/tests.yml` runs the full suite on Python
   3.10–3.14 for pushes and pull requests.
 - Repository-root `.github/workflows/slack-changelog.yml` posts a deterministic
-  branch/commit/file/component summary after every push when the
-  `SLACK_WEBHOOK_URL` Actions secret is configured.
-- Slack changelog generation uses only GitHub event data and Python stdlib; it
-  consumes no AI tokens and redacts common secret-like strings.
+  `ASTRA v<version>` summary after every push when the `SLACK_WEBHOOK_URL`
+  Actions secret is configured.
+- Concrete features/fixes come from `docs/CHANGELOG_PENDING_<version>.md`; push
+  metadata and the comparison link remain attached.
+- Slack changelog generation uses only repository/GitHub event data and Python
+  stdlib; it consumes no AI tokens and redacts common secret-like strings.
 - Setup: `docs/SLACK_CHANGELOG_SETUP.md`.
 
 ## Verification state
 
-- Full local suite: **471 passed**.
+- Full local suite: **492 passed** with warnings treated as errors; repeated with
+  a fixed hash seed for the same **492 passed** result.
 - Python compilation: PASS.
 - `git diff --check`: PASS.
-- No real Slack message sent from this review environment.
-- No GitHub push, merge, or release performed.
+- GitHub confirmed the previous v0.0.20 push ran all five test jobs and posted
+  the token-free Slack changelog successfully.
+- No v0.0.21 GitHub push or release performed.
 
 ## Manual Windows review gates
 
@@ -131,10 +155,12 @@ Model, GUI theme, self-learning mode, and Eyes state use this path.
 7. Set separate PINs for Erik and Petr; verify `who am i`, Lock/switch, chat hiding,
    and that each profile has separate facts/preferences.
 8. Test `self learning preference`, `correction`, `scan`, `review`, `guidance`,
-   approval, rejection, and restart persistence.
-9. Configure the Slack webhook secret, push a small review commit, and verify the
-   chosen channel receives one changelog message.
-10. Review the diff before any commit, push, or merge.
+   `health`, approval, rejection, and restart persistence.
+9. Run `backup create before-review`, `backup list`, and `backup verify latest`;
+   keep the generated personal ZIP private.
+10. Configure the Slack webhook secret, push a small review commit, and verify
+   the chosen channel receives one versioned changelog with concrete bullets.
+11. Review the diff before any commit, push, or merge.
 
 ## Main source areas
 

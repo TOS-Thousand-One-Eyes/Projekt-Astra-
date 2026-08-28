@@ -33,3 +33,32 @@ def test_diagnostics_resurfaces_learning_and_experience_warnings():
 def test_diagnostics_old_constructor_still_works():
     response = DiagnosticsCommand(Config(), Memory()).handle("status", "status")
     assert "no warnings" in response
+
+
+def test_diagnostics_surfaces_self_learning_health_findings():
+    class SelfLearningManager(Manager):
+        def health(self):
+            return {
+                "errors": 1,
+                "warnings": 0,
+                "blocked_guidance": 1,
+                "issues": [
+                    {
+                        "severity": "error",
+                        "code": "blocked_active_guidance",
+                        "item_id": "G-test",
+                        "message": "Linked candidate is rejected.",
+                    }
+                ],
+            }
+
+    command = DiagnosticsCommand(
+        Config(),
+        Memory(),
+        self_learning=SelfLearningManager([]),
+    )
+
+    response = command.handle("diagnostics", "diagnostics")
+
+    assert "self-learning health: 1 error" in response
+    assert "blocked_active_guidance" in response
