@@ -4,7 +4,8 @@ from commands.base import Command
 class IdentityCommand(Command):
     help_text = (
         "- who am i / identity status - show the active local profile\n"
-        "- identity profiles - show configured profile names"
+        "- identity profiles - show configured profile names\n"
+        "- identity storage - show the active persistent data location"
     )
 
     def __init__(self, identity=None, identity_manager=None, logger=None):
@@ -24,6 +25,8 @@ class IdentityCommand(Command):
             return self._status()
         if normalized in {"identity profiles", "profiles", "user profiles"}:
             return self._profiles()
+        if normalized in {"identity storage", "profile storage"}:
+            return self._storage()
         if normalized.startswith("user switch ") or normalized.startswith(
             "identity switch "
         ):
@@ -40,9 +43,30 @@ class IdentityCommand(Command):
             "Active identity:\n"
             f"- profile: {self.identity.display_name}\n"
             f"- user id: {self.identity.user_id}\n"
-            "- personal runtime data: isolated\n"
+            f"- personal runtime data: {self.identity.data_dir}\n"
+            f"- last seen version: {self._last_seen()}\n"
             "- PIN: never accepted through chat"
         )
+
+    def _storage(self):
+        if not self.identity:
+            return "Identity profiles are not active in this legacy runtime."
+        root = (
+            self.identity_manager.data_dir
+            if self.identity_manager
+            else self.identity.data_dir.parent.parent
+        )
+        return (
+            "Identity storage:\n"
+            f"- root: {root}\n"
+            f"- active profile: {self.identity.data_dir}\n"
+            "- source updates do not replace this directory"
+        )
+
+    def _last_seen(self):
+        if not self.identity_manager:
+            return "unavailable"
+        return self.identity_manager.last_seen_version(self.identity.user_id) or "not recorded"
 
     def _profiles(self):
         if not self.identity_manager:
@@ -59,6 +83,7 @@ class IdentityCommand(Command):
                 else ""
             )
             lines.append(
-                f"- {item['display_name']} [{item['id']}]: {configured}{active}"
+                f"- {item['display_name']} [{item['id']}]: {configured}; "
+                f"last seen {item.get('last_seen_version') or 'not recorded'}{active}"
             )
         return "\n".join(lines)

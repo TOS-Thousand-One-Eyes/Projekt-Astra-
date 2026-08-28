@@ -1,6 +1,8 @@
 import json
 import threading
 
+import pytest
+
 from config.config import Config, DEFAULTS, UNKNOWN_VERSION
 
 
@@ -169,6 +171,27 @@ def test_present_version_produces_no_load_warning(tmp_path):
     path.write_text(json.dumps({"name": "TestBot", "version": "1.2.3"}), encoding="utf-8")
     config = Config(path=path)
     assert config.load_warnings == []
+
+
+def test_malformed_version_loads_as_unknown_with_warning(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"version": "twenty two"}), encoding="utf-8")
+
+    config = Config(path=path)
+
+    assert config.version == UNKNOWN_VERSION
+    assert any("valid \"version\"" in warning for warning in config.load_warnings)
+
+
+def test_persist_rejects_malformed_version(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"version": "0.0.21"}), encoding="utf-8")
+    config = Config(path=path)
+
+    with pytest.raises(ValueError, match="major.minor.patch"):
+        config.persist({"version": "22"})
+
+    assert json.loads(path.read_text(encoding="utf-8"))["version"] == "0.0.21"
 
 
 def test_string_false_for_boolean_setting_keeps_the_default(tmp_path):

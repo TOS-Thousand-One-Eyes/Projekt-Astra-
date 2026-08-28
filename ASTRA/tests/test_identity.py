@@ -35,6 +35,19 @@ def test_default_profiles_are_erik_and_petr(tmp_path):
     assert all(item["pin_configured"] is False for item in profiles)
 
 
+def test_default_manager_uses_stable_user_data_path(tmp_path, monkeypatch):
+    stable = tmp_path / "local-app-data" / "Astra"
+    monkeypatch.setattr("identity.identity_manager.user_data_dir", lambda: stable)
+    monkeypatch.setattr(
+        "identity.identity_manager.SOURCE_DATA_DIR", tmp_path / "empty-checkout-data"
+    )
+
+    manager = IdentityManager()
+
+    assert manager.data_dir == stable
+    assert manager.path == stable / "identity" / "profiles.json"
+
+
 def test_cli_first_login_creates_pin_and_opens_selected_profile(tmp_path):
     manager = IdentityManager(data_dir=tmp_path)
     answers = iter(["Petr"])
@@ -89,6 +102,17 @@ def test_changing_pin_invalidates_the_previous_pin(tmp_path):
     with pytest.raises(AuthenticationError):
         manager.authenticate("erik", "1234")
     assert manager.authenticate("erik", "4321").display_name == "Erik"
+
+
+def test_stale_manager_cannot_change_a_pin_that_was_already_replaced(tmp_path):
+    first = configured_manager(tmp_path)
+    stale = IdentityManager(data_dir=tmp_path)
+    first.change_pin("erik", "1234", "4321")
+
+    with pytest.raises(AuthenticationError):
+        stale.change_pin("erik", "1234", "9999")
+
+    assert first.authenticate("erik", "4321").display_name == "Erik"
 
 
 def test_pin_is_salted_and_hashed_not_stored_as_plaintext(tmp_path):
@@ -157,6 +181,74 @@ def test_legacy_data_is_not_assigned_to_petr(tmp_path):
     assert not (session.data_dir / "facts.json").exists()
 
 
+def test_checkout_local_profiles_and_users_migrate_to_stable_data_dir(tmp_path):
+    legacy = tmp_path / "checkout-data"
+    stable = tmp_path / "stable-data"
+    old_manager = IdentityManager(data_dir=legacy)
+    old_manager.initialize_pin("erik", "1234")
+    old_session = old_manager.session_after_setup("erik")
+    (old_session.data_dir / "facts.json").write_text(
+        '{"favorite color":"blue"}', encoding="utf-8"
+    )
+
+    migrated = IdentityManager(data_dir=stable, legacy_data_dir=legacy)
+    session = migrated.authenticate("erik", "1234")
+
+    assert session.data_dir == stable / "users" / "erik"
+    assert (session.data_dir / "facts.json").read_text(encoding="utf-8") == (
+        '{"favorite color":"blue"}'
+    )
+    assert (legacy / "identity" / "profiles.json").exists()
+
+
+def test_legacy_store_is_not_remerged_after_stable_identity_exists(tmp_path):
+    legacy = tmp_path / "checkout-data"
+    stable = tmp_path / "stable-data"
+    old_manager = IdentityManager(data_dir=legacy)
+    old_manager.initialize_pin("erik", "1234")
+    old_session = old_manager.session_after_setup("erik")
+    old_fact = old_session.data_dir / "facts.json"
+    old_fact.write_text('{"legacy":true}', encoding="utf-8")
+
+    migrated = IdentityManager(data_dir=stable, legacy_data_dir=legacy)
+    stable_fact = migrated.authenticate("erik", "1234").data_dir / "facts.json"
+    stable_fact.unlink()
+
+    IdentityManager(data_dir=stable, legacy_data_dir=legacy)
+
+    assert not stable_fact.exists()
+
+
+def test_profile_last_seen_version_is_persistent_and_isolated(tmp_path):
+    manager = configured_manager(tmp_path)
+
+    assert manager.last_seen_version("erik") is None
+    assert manager.mark_version_seen("erik", "0.0.22") is True
+    assert manager.mark_version_seen("erik", "0.0.22") is False
+
+    reloaded = IdentityManager(data_dir=tmp_path)
+    assert reloaded.last_seen_version("erik") == "0.0.22"
+    assert reloaded.last_seen_version("petr") is None
+
+
+def test_separate_managers_do_not_overwrite_each_others_version_state(tmp_path):
+    first = configured_manager(tmp_path)
+    second = IdentityManager(data_dir=tmp_path)
+
+    first.mark_version_seen("erik", "0.0.22")
+    second.mark_version_seen("petr", "0.0.21")
+
+    reloaded = IdentityManager(data_dir=tmp_path)
+    assert reloaded.last_seen_version("erik") == "0.0.22"
+    assert reloaded.last_seen_version("petr") == "0.0.21"
+
+
+def test_invalid_last_seen_version_is_rejected(tmp_path):
+    manager = configured_manager(tmp_path)
+    with pytest.raises(ValueError, match="major.minor.patch"):
+        manager.mark_version_seen("erik", "22")
+
+
 def test_identity_command_reports_active_profile_without_accepting_chat_pin(tmp_path):
     manager = configured_manager(tmp_path)
     identity = manager.authenticate("erik", "1234")
@@ -164,10 +256,14 @@ def test_identity_command_reports_active_profile_without_accepting_chat_pin(tmp_
 
     status = command.handle("who am i", "who am i")
     switch = command.handle("user switch petr", "user switch petr")
+    storage = command.handle("identity storage", "identity storage")
 
     assert "Erik" in status and "erik" in status
+    assert str(identity.data_dir) in status
     assert "never accepted through chat" in status
     assert "Lock / switch" in switch
+    assert str(manager.data_dir) in storage
+    assert "source updates do not replace" in storage
 
 
 def test_model_prompt_names_only_the_active_profile(tmp_path):

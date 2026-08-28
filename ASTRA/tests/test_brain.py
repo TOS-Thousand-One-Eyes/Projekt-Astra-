@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 
 from commands.registry import CommandRegistry
 from conftest import StubModule
@@ -196,6 +197,93 @@ class TestUpdateCheck:
 
     def test_no_check_when_update_checker_is_none(self, running_brain):
         assert running_brain.update_checker is None
+
+
+class TestVersionBriefing:
+
+    class StubIdentityManager:
+        def __init__(self, last_seen=None):
+            self.last_seen = last_seen
+            self.marked = []
+
+        def last_seen_version(self, user_id):
+            assert user_id == "erik"
+            return self.last_seen
+
+        def mark_version_seen(self, user_id, version):
+            self.marked.append((user_id, version))
+
+    class StubReleaseNotes:
+        def __init__(self, message):
+            self.message = message
+            self.calls = []
+
+        def briefing(self, last_seen, current):
+            self.calls.append((last_seen, current))
+            return self.message
+
+    def test_briefing_is_unfiltered_and_marked_seen_after_display(self, config, memory):
+        config.version = "0.0.22"
+        logger = Logger(level="ERROR")
+        manager = self.StubIdentityManager(last_seen="0.0.21")
+        notes = self.StubReleaseNotes("One visible update.")
+        brain = Brain(
+            logger,
+            config,
+            memory,
+            Modules(logger),
+            identity=SimpleNamespace(user_id="erik", display_name="Erik"),
+            identity_manager=manager,
+            release_notes=notes,
+        )
+
+        brain.start()
+
+        assert any("CHAT Astra: One visible update." in item for item in logger.logs)
+        assert manager.marked == [("erik", "0.0.22")]
+        assert notes.calls == [("0.0.21", "0.0.22")]
+
+    def test_version_is_not_marked_seen_when_display_fails(self, config, memory):
+        class FailingChatLogger(Logger):
+            def chat(self, message):
+                raise OSError("display unavailable")
+
+        config.version = "0.0.22"
+        logger = FailingChatLogger()
+        manager = self.StubIdentityManager()
+        brain = Brain(
+            logger,
+            config,
+            memory,
+            Modules(logger),
+            identity=SimpleNamespace(user_id="erik", display_name="Erik"),
+            identity_manager=manager,
+            release_notes=self.StubReleaseNotes("Update."),
+        )
+
+        brain.start()
+
+        assert manager.marked == []
+        assert any("version was not marked as seen" in item for item in logger.logs)
+
+    def test_no_message_or_write_when_there_is_no_new_briefing(self, config, memory):
+        config.version = "0.0.22"
+        logger = Logger()
+        manager = self.StubIdentityManager(last_seen="0.0.22")
+        brain = Brain(
+            logger,
+            config,
+            memory,
+            Modules(logger),
+            identity=SimpleNamespace(user_id="erik", display_name="Erik"),
+            identity_manager=manager,
+            release_notes=self.StubReleaseNotes(None),
+        )
+
+        brain.start()
+
+        assert manager.marked == []
+        assert not any("CHAT" in item for item in logger.logs)
 
 
 class TestModulesLifecycle:

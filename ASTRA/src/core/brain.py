@@ -42,6 +42,7 @@ class Brain:
         screen_observer=None,
         identity=None,
         identity_manager=None,
+        release_notes=None,
     ):
         self.state = self.OFFLINE
         self.logger = logger
@@ -53,6 +54,7 @@ class Brain:
         self.screen_observer = screen_observer
         self.identity = identity
         self.identity_manager = identity_manager
+        self.release_notes = release_notes
         self.experience = experience or ExperienceManager()
         self.reflections = reflections or ReflectionManager()
         self.commands = (
@@ -171,8 +173,47 @@ class Brain:
                 f"Hello! I am {self.config.name}."
             )
 
+        self._show_release_briefing()
+
         if self.update_checker:
             self.update_checker.check()
+
+    def _show_release_briefing(self):
+        if not (self.identity and self.identity_manager and self.release_notes):
+            return
+        try:
+            last_seen = self.identity_manager.last_seen_version(
+                self.identity.user_id
+            )
+            briefing = self.release_notes.briefing(
+                last_seen, self.config.version
+            )
+        except Exception as error:
+            self.logger.warning(
+                f"Could not prepare the update briefing ({error}); "
+                "the version was not marked as seen."
+            )
+            return
+        if not briefing:
+            return
+
+        try:
+            self.logger.chat(f"{self.config.name}: {briefing}")
+        except Exception as error:
+            self.logger.warning(
+                f"Could not display the update briefing ({error}); "
+                "the version was not marked as seen."
+            )
+            return
+        try:
+            self.identity_manager.mark_version_seen(
+                self.identity.user_id, self.config.version
+            )
+        except Exception as error:
+            self.logger.warning(
+                f"The update briefing was shown, but its seen state could not "
+                f"be saved ({error})."
+            )
 
     def stop(self):
         self._set_state(self.STOPPING)

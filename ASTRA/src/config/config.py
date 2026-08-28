@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import threading
 import uuid
 from pathlib import Path
@@ -10,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_FILE = PROJECT_ROOT / "config.json"
 
 UNKNOWN_VERSION = "0.0.0-unknown"
+VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$")
 
 DEFAULTS = {
     "name": "Astra",
@@ -58,10 +60,16 @@ class Config:
         settings.update(self._validated(self._load()))
 
         self.name = settings["name"]
-        self.version = settings.get("version") or UNKNOWN_VERSION
-        if not settings.get("version"):
+        configured_version = settings.get("version")
+        self.version = (
+            configured_version.strip()
+            if isinstance(configured_version, str)
+            and VERSION_PATTERN.fullmatch(configured_version.strip())
+            else UNKNOWN_VERSION
+        )
+        if self.version == UNKNOWN_VERSION:
             self.load_warnings.append(
-                f'{self.path.name} has no "version" value; Astra can\'t tell '
+                f'{self.path.name} has no valid "version" value; Astra can\'t tell '
                 f"whether it's up to date until it's set (if update checks "
                 f"are enabled, they still report the latest available version)."
             )
@@ -219,8 +227,13 @@ class Config:
             if key not in _PERSISTABLE_KEYS:
                 raise ValueError(f"Unknown persistent config setting: {key}")
             if key == "version":
-                if not isinstance(value, str) or not value.strip():
-                    raise ValueError("Config version must be a non-empty string.")
+                if (
+                    not isinstance(value, str)
+                    or not VERSION_PATTERN.fullmatch(value.strip())
+                ):
+                    raise ValueError(
+                        "Config version must use numeric major.minor.patch format."
+                    )
                 normalized[key] = value.strip()
                 continue
 

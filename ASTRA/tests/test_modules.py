@@ -1,3 +1,5 @@
+import io
+
 import pytest
 
 from conftest import StubModule
@@ -159,6 +161,24 @@ def test_language_module_start_distinguishes_http_error_from_unreachable():
 
     with pytest.raises(ConnectionError, match="HTTP 404"):
         module.start()
+
+
+def test_language_module_closes_http_error_response_stream():
+    import urllib.error
+
+    stream = io.BytesIO(b"not found")
+    error = urllib.error.HTTPError(
+        "http://localhost:11434/api/tags", 404, "not found", {}, stream
+    )
+
+    class StubClient:
+        def ensure_available(self):
+            raise error
+
+    with pytest.raises(ConnectionError):
+        LanguageModule(StubClient()).start()
+
+    assert stream.closed is True
 
 
 def test_language_module_runtime_failure_disables_it_and_returns_none():

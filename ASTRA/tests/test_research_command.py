@@ -1,3 +1,6 @@
+import io
+import urllib.error
+
 from commands.registry import build_default_registry
 from commands.research_command import ResearchCommand
 from learning.learning_manager import LearningManager
@@ -99,6 +102,25 @@ def test_search_wikipedia_fulltext_parses_query_search_response():
         }
     ]
     assert responses and all(response.closed for response in responses)
+
+
+def test_wikipedia_search_closes_http_error_response_stream():
+    stream = io.BytesIO(b"blocked")
+    error = urllib.error.HTTPError(
+        "https://en.wikipedia.org/w/api.php", 429, "blocked", {}, stream
+    )
+
+    def opener(_request, timeout):
+        raise error
+
+    try:
+        search_wikipedia("line balancing", opener=opener)
+    except ResearchError:
+        pass
+    else:
+        raise AssertionError("ResearchError was not raised")
+
+    assert stream.closed is True
 
 
 def test_research_command_summarizes_stubbed_sources():

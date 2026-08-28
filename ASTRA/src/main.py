@@ -20,6 +20,7 @@ from modules.language_module import LanguageModule
 from modules.modules import Modules
 from utils.logger import Logger
 from utils.ollama_client import OllamaClient
+from utils.release_notes import ReleaseNotes
 from utils.update_checker import UpdateChecker
 from vision.screen_observer import ScreenObserverModule
 from vision.semantic_vision import LocalVisionDescriber
@@ -167,6 +168,11 @@ def build_runtime(config, logger, identity=None, identity_manager=None):
         reflections=reflections,
         identity=identity,
         identity_manager=identity_manager,
+        release_notes=(
+            ReleaseNotes(config.path.parent / "docs")
+            if identity and identity_manager
+            else None
+        ),
     )
     return brain
 

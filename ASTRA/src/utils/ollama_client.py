@@ -207,8 +207,14 @@ class OllamaClient:
         request = urllib.request.Request(
             url, data=payload, headers=headers, method=method
         )
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return json.load(response)
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return json.load(response)
+        except Exception as error:
+            close = getattr(error, "close", None)
+            if callable(close):
+                close()
+            raise
 
 
 def _same_model_name(expected, actual):

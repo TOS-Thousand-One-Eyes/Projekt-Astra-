@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.request
 from pathlib import Path
@@ -20,7 +21,7 @@ EXCLUDED_CHANGELOG_SECTIONS = {
 }
 
 
-def build_payload(event, release=None):
+def build_payload(event, release=None, changed_files=None):
     repository = event.get("repository") or {}
     repo_name = clean(repository.get("full_name") or "unknown repository", 180)
     repo_url = repository.get("html_url") or ""
@@ -30,7 +31,7 @@ def build_payload(event, release=None):
     commits = [item for item in event.get("commits") or [] if isinstance(item, dict)]
 
     commit_lines = []
-    changed_files = []
+    event_changed_files = []
     for commit in commits[:MAX_COMMITS]:
         short_id = clean(str(commit.get("id") or "")[:7] or "unknown", 12)
         message = clean(str(commit.get("message") or "").splitlines()[0], 220)
@@ -39,8 +40,13 @@ def build_payload(event, release=None):
         commit_lines.append(f"• {marker} {message or '(no commit message)'}")
         for field in ("added", "modified", "removed"):
             for path in commit.get(field) or []:
-                if isinstance(path, str) and path not in changed_files:
-                    changed_files.append(path)
+                if isinstance(path, str) and path not in event_changed_files:
+                    event_changed_files.append(path)
+
+    if changed_files is None:
+        changed_files = event_changed_files
+    else:
+        changed_files = unique_paths(changed_files)
 
     if len(commits) > MAX_COMMITS:
         commit_lines.append(f"• …and {len(commits) - MAX_COMMITS} more commit(s)")
@@ -67,22 +73,13 @@ def build_payload(event, release=None):
         + f"*Commits:* {len(commits)}   *Changed files:* {len(changed_files)}\n"
         f"*Components:* {component_text}"
     )
-    release_blocks = format_release_blocks(release)
-    if release_blocks:
-        detail_blocks = release_blocks
+    detail_blocks = format_release_blocks(release)
+    details = "*Commits*\n" + "\n".join(commit_lines)
+    if file_preview:
+        details += f"\n\n*Files:* {file_preview}"
     else:
-        details = "\n".join(commit_lines)
-        if file_preview:
-            details += f"\n\n*Files:* {file_preview}"
-        detail_blocks = [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": details[:MAX_SECTION_CHARS],
-                },
-            }
-        ]
+        details += "\n\n*Files:* no changed-file list was available"
+    detail_blocks.append(slack_section(details))
     if compare_url:
         detail_blocks.append(
             {
@@ -242,7 +239,7 @@ def slack_section(text):
 
 def strip_markdown(value):
     text = " ".join(str(value or "").split())
-    return re.sub(r"[*_`]+", "", text).strip()
+    return re.sub(r"[*`]+", "", text).strip()
 
 
 def summarize_components(paths):
@@ -266,6 +263,50 @@ def summarize_components(paths):
     return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
 
 
+def unique_paths(paths):
+    results = []
+    for value in paths or []:
+        path = str(value or "").strip()
+        if path and "\x00" not in path and path not in results:
+            results.append(path)
+    return results
+
+
+def git_changed_files(project_root, before, after, runner=subprocess.run):
+    """Return changed paths from the checked-out repository without a shell."""
+    before = validate_revision(before, allow_zero=True)
+    after = validate_revision(after)
+    if not after:
+        return []
+    if before and set(before) != {"0"}:
+        command = ["git", "diff", "--name-only", "--no-renames", before, after, "--"]
+    else:
+        command = [
+            "git", "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", after,
+        ]
+    try:
+        result = runner(
+            command,
+            cwd=str(Path(project_root)),
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return unique_paths(str(getattr(result, "stdout", "")).splitlines())[:1000]
+
+
+def validate_revision(value, allow_zero=False):
+    text = str(value or "").strip()
+    if not re.fullmatch(r"[A-Fa-f0-9]{7,64}", text):
+        return ""
+    if not allow_zero and set(text) == {"0"}:
+        return ""
+    return text
+
+
 def clean(value, limit):
     text = " ".join(str(value or "").split())
     patterns = (
@@ -278,14 +319,28 @@ def clean(value, limit):
         text = re.sub(pattern, "[REDACTED_SECRET]", text, flags=re.IGNORECASE)
     # Commit messages and paths are untrusted Slack mrkdwn data. Escaping angle
     # brackets prevents <!channel> / user mention injection from a commit title.
-    text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    text = (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("`", "'")
+    )
     return text[:limit]
 
 
 def safe_http_url(value):
     text = str(value or "").strip()
+    if not text or any(character in text for character in "<>|\r\n"):
+        return ""
     parsed = urlparse(text)
-    return text if parsed.scheme in {"http", "https"} and parsed.netloc else ""
+    return (
+        text
+        if parsed.scheme in {"http", "https"}
+        and parsed.hostname
+        and parsed.username is None
+        and parsed.password is None
+        else ""
+    )
 
 
 def validate_webhook_url(value):
@@ -304,14 +359,20 @@ def post_payload(webhook_url, payload, opener=urllib.request.urlopen):
     url = validate_webhook_url(webhook_url)
     request = urllib.request.Request(
         url,
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        data=json.dumps(payload, ensure_ascii=True).encode("utf-8"),
         headers={"Content-Type": "application/json; charset=utf-8"},
         method="POST",
     )
-    with opener(request, timeout=15) as response:
-        status = getattr(response, "status", 200)
-        if not 200 <= int(status) < 300:
-            raise RuntimeError(f"Slack webhook returned HTTP {status}.")
+    try:
+        with opener(request, timeout=15) as response:
+            status = getattr(response, "status", 200)
+            if not 200 <= int(status) < 300:
+                raise RuntimeError(f"Slack webhook returned HTTP {status}.")
+    except Exception as error:
+        close = getattr(error, "close", None)
+        if callable(close):
+            close()
+        raise
 
 
 def main():
@@ -328,8 +389,26 @@ def main():
         event = json.loads(event_path.read_text(encoding="utf-8"))
         project_root = Path(__file__).resolve().parents[1]
         release = load_release_notes(project_root)
-        post_payload(webhook, build_payload(event, release=release))
-    except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as error:
+        changed_files = git_changed_files(
+            project_root,
+            os.environ.get("GITHUB_BEFORE") or event.get("before"),
+            os.environ.get("GITHUB_AFTER") or event.get("after"),
+        )
+        post_payload(
+            webhook,
+            build_payload(
+                event,
+                release=release,
+                changed_files=changed_files or None,
+            ),
+        )
+    except (
+        OSError,
+        UnicodeError,
+        ValueError,
+        RuntimeError,
+        json.JSONDecodeError,
+    ) as error:
         print(f"Slack changelog failed: {error}", file=sys.stderr)
         return 1
     print("Slack changelog posted.")

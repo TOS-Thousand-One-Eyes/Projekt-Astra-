@@ -1,3 +1,6 @@
+import io
+import urllib.error
+
 import pytest
 
 from commands.web_command import WebCommand
@@ -13,18 +16,26 @@ class StubResponse:
     def __init__(self, body, content_type="text/html; charset=utf-8"):
         self.body = body
         self.headers = StubHeaders({"Content-Type": content_type})
+        self.closed = False
 
     def read(self, limit):
         return self.body[:limit]
 
+    def close(self):
+        self.closed = True
+
 
 def test_fetch_url_accepts_http_and_extracts_html_text():
+    responses = []
+
     def opener(request, timeout):
         assert request.full_url == "https://example.com/page"
         assert timeout == 10
-        return StubResponse(
+        response = StubResponse(
             b"<html><head><script>secret()</script></head><body><h1>Title</h1><p>Hello web.</p></body></html>"
         )
+        responses.append(response)
+        return response
 
     result = fetch_url("https://example.com/page", opener=opener)
 
@@ -32,6 +43,22 @@ def test_fetch_url_accepts_http_and_extracts_html_text():
     assert result["content_type"].startswith("text/html")
     assert result["text"] == "Title Hello web."
     assert "secret" not in result["text"]
+    assert responses[0].closed is True
+
+
+def test_fetch_url_closes_http_error_response_stream():
+    stream = io.BytesIO(b"blocked")
+    error = urllib.error.HTTPError(
+        "https://example.com", 403, "blocked", {}, stream
+    )
+
+    with pytest.raises(WebFetchError):
+        fetch_url(
+            "https://example.com",
+            opener=lambda _request, timeout: (_ for _ in ()).throw(error),
+        )
+
+    assert stream.closed is True
 
 
 def test_fetch_url_rejects_non_http_urls():

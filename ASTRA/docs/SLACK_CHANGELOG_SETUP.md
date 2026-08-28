@@ -2,10 +2,14 @@
 
 ASTRA posts a deterministic, versioned changelog after every GitHub push. The
 message headline uses the current `config.json` version (for example
-`ASTRA v0.0.21 changelog`) and the body uses the real feature/fix bullets from
+`ASTRA v0.0.22 changelog`) and the body uses the real feature/fix bullets from
 `docs/CHANGELOG_PENDING_<version>.md`. Repository, branch, commit, file, and
 component metadata remains attached below the release content. It does not call
 an AI model and therefore consumes no model tokens.
+
+The workflow checks out full Git history and obtains changed files from the
+push's before/after Git diff. This avoids GitHub Actions push payloads that omit
+per-commit file arrays and previously produced a misleading `Changed files: 0`.
 
 Before pushing a new version, keep these values synchronized:
 

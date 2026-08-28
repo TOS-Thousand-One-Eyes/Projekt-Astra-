@@ -1,10 +1,10 @@
 # ASTRA project state
 
-Version: 0.0.21
+Version: 0.0.22
 
 Branch under review: `DEV-need-check`
 
-Remote base commit: `9834f15`
+Remote base commit: `8ad04cd`
 
 Status: `DEV-need-check` review candidate; not released
 
@@ -23,7 +23,7 @@ commands or approval gates.
   self-learning candidates/guidance, reflections, reminders, and actions.
 - Ollama language fallback is optional and model calls are serialized so a shared
   text/vision model is never called concurrently by chat and Eyes.
-- Runtime/package/config version values are synchronized at `0.0.21`.
+- Runtime/package/config version values are synchronized at `0.0.22`.
 - Local profiles `Erik` and `Petr` authenticate with separately salted PIN
   hashes and use isolated persistent runtime directories.
 
@@ -112,8 +112,12 @@ longer collide on the same temporary file.
 - PINs are PBKDF2-SHA256 hashed with independent random salts and never enter chat.
 - Corrupt PIN metadata fails closed, including an excessive work factor that
   could otherwise stall authentication.
-- Personal stores live under `data/users/erik` or `data/users/petr`.
-- Pre-profile data is copied to Erik once without deleting the recoverable originals.
+- Personal stores live under the stable OS user-data root (`%LOCALAPPDATA%\Astra`
+  on Windows), outside replaceable source/ZIP directories.
+- Checkout-local identity, profile, and pre-profile data is copied forward once
+  without deleting the recoverable originals.
+- Erik and Petr track update briefings independently; a version is recorded only
+  after its message is displayed.
 - The GUI hides chat and stops Brain/Eyes when locked or switching users.
 - Automatic lock defaults to 15 minutes and waits for an active model/command worker
   to finish before stopping the runtime.
@@ -127,21 +131,20 @@ longer collide on the same temporary file.
 - Repository-root `.github/workflows/slack-changelog.yml` posts a deterministic
   `ASTRA v<version>` summary after every push when the `SLACK_WEBHOOK_URL`
   Actions secret is configured.
-- Concrete features/fixes come from `docs/CHANGELOG_PENDING_<version>.md`; push
-  metadata and the comparison link remain attached.
+- Concrete features/fixes come from `docs/CHANGELOG_PENDING_<version>.md`; commit,
+  Git-diff file metadata, and the comparison link remain attached.
 - Slack changelog generation uses only repository/GitHub event data and Python
   stdlib; it consumes no AI tokens and redacts common secret-like strings.
 - Setup: `docs/SLACK_CHANGELOG_SETUP.md`.
 
 ## Verification state
 
-- Full local suite: **492 passed** with warnings treated as errors; repeated with
-  a fixed hash seed for the same **492 passed** result.
+- Full local suite: **529 passed** with warnings treated as errors; repeated with
+  a fixed hash seed for the same **529 passed** result.
 - Python compilation: PASS.
 - `git diff --check`: PASS.
-- GitHub confirmed the previous v0.0.20 push ran all five test jobs and posted
-  the token-free Slack changelog successfully.
-- No v0.0.21 GitHub push or release performed.
+- GitHub confirmed the v0.0.21 review push and token-free Slack changelog.
+- No v0.0.22 GitHub push or release performed.
 
 ## Manual Windows review gates
 

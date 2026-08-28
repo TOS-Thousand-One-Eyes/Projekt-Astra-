@@ -92,6 +92,7 @@ def search_web(query, max_results=DEFAULT_MAX_RESULTS, opener=None):
         with open_url(request, timeout=10) as response:
             raw = response.read(200_000)
     except Exception as error:
+        close_response(error)
         raise ResearchError(f"Could not search the web: {error}") from error
 
     html = raw.decode("utf-8", errors="replace")
@@ -191,13 +192,21 @@ def search_wikipedia_fulltext(query, max_results=DEFAULT_MAX_RESULTS, opener=Non
 
 
 def read_bounded_response(open_url, request, limit):
-    response = open_url(request, timeout=10)
+    try:
+        response = open_url(request, timeout=10)
+    except Exception as error:
+        close_response(error)
+        raise
     try:
         return response.read(limit)
     finally:
-        close = getattr(response, "close", None)
-        if callable(close):
-            close()
+        close_response(response)
+
+
+def close_response(response):
+    close = getattr(response, "close", None)
+    if callable(close):
+        close()
 
 
 class SearchResultParser(HTMLParser):

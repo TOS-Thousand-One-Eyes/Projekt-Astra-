@@ -1,3 +1,6 @@
+import io
+import urllib.error
+
 from utils.logger import Logger
 from utils.update_checker import UpdateChecker
 
@@ -123,3 +126,38 @@ def test_unknown_local_version_with_failing_fetch_is_logged_at_debug():
     checker.check()
     logs = logger.get_logs()
     assert any("Update check failed" in entry for entry in logs)
+
+
+def test_unknown_local_version_does_not_report_malformed_latest_version():
+    logger = Logger(level="DEBUG")
+    checker = UpdateChecker(
+        "0.0.0-unknown", logger, fetch=lambda: "not-a-version"
+    )
+
+    checker.check()
+
+    logs = logger.get_logs()
+    assert any("Update check failed" in entry for entry in logs)
+    assert not any("Latest available version" in entry for entry in logs)
+
+
+def test_default_fetch_closes_http_error_response_stream(monkeypatch):
+    stream = io.BytesIO(b"not found")
+    error = urllib.error.HTTPError(
+        "https://example.com/version", 404, "not found", {}, stream
+    )
+
+    def fail(_url, timeout):
+        raise error
+
+    monkeypatch.setattr("urllib.request.urlopen", fail)
+    checker = UpdateChecker("0.0.21", Logger(), version_url="https://example.com/version")
+
+    try:
+        checker._fetch_from_url()
+    except urllib.error.HTTPError:
+        pass
+    else:
+        raise AssertionError("HTTPError was not raised")
+
+    assert stream.closed is True

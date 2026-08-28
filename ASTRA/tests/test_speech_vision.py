@@ -27,13 +27,14 @@ def png_bytes(width=2, height=3):
 def test_speech_manager_invokes_windows_sapi_runner():
     calls = []
 
-    def runner(args, check, capture_output, text, timeout):
+    def runner(args, check, capture_output, text, input, timeout):
         calls.append(
             {
                 "args": args,
                 "check": check,
                 "capture_output": capture_output,
                 "text": text,
+                "input": input,
                 "timeout": timeout,
             }
         )
@@ -44,9 +45,25 @@ def test_speech_manager_invokes_windows_sapi_runner():
 
     assert spoken == "hello there"
     assert calls[0]["args"][0] == "powershell"
-    assert calls[0]["args"][-1] == "hello there"
+    assert calls[0]["args"][-1] != "hello there"
+    assert calls[0]["input"] == "hello there"
+    assert "[Console]::In.ReadToEnd()" in calls[0]["args"][3]
     assert calls[0]["check"] is True
     assert calls[0]["timeout"] == 20
+
+
+def test_speech_text_cannot_be_interpreted_as_powershell_code():
+    calls = []
+
+    def runner(args, **kwargs):
+        calls.append((args, kwargs))
+
+    payload = "hello'; Remove-Item C:\\\\important; '"
+    manager = SpeechManager(runner=runner, system=lambda: "Windows")
+
+    assert manager.speak(payload) == payload
+    assert all(payload not in argument for argument in calls[0][0])
+    assert calls[0][1]["input"] == payload
 
 
 def test_speech_manager_reports_unsupported_platform():
