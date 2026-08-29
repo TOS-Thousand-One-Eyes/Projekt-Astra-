@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 
 import pytest
 
@@ -76,6 +77,93 @@ def test_pin_authentication_opens_isolated_profile_directory(tmp_path):
     assert erik.data_dir != petr.data_dir
 
 
+def test_pin_persists_across_identity_manager_recreation(tmp_path):
+    manager = IdentityManager(data_dir=tmp_path)
+    manager.initialize_pin("petr", "5678")
+
+    reloaded = IdentityManager(data_dir=tmp_path)
+
+    assert reloaded.resolve_profile("petr")["pin_configured"] is True
+    assert reloaded.authenticate("petr", "5678").display_name == "Petr"
+    with pytest.raises(IdentityStoreError, match="already configured"):
+        reloaded.initialize_pin("petr", "9999")
+
+
+def test_two_manager_instances_do_not_overwrite_each_others_pin_changes(tmp_path):
+    first = IdentityManager(data_dir=tmp_path)
+    second = IdentityManager(data_dir=tmp_path)
+
+    first.initialize_pin("erik", "1234")
+    second.initialize_pin("petr", "5678")
+
+    reloaded = IdentityManager(data_dir=tmp_path)
+    assert reloaded.authenticate("erik", "1234").user_id == "erik"
+    assert reloaded.authenticate("petr", "5678").user_id == "petr"
+
+
+def test_last_seen_version_is_profile_linked_and_does_not_change_pin(tmp_path):
+    manager = configured_manager(tmp_path)
+    before = json.loads(manager.path.read_text(encoding="utf-8"))
+    erik_pin = before["profiles"][0]["pin"]
+
+    assert manager.mark_version_seen(
+        "erik",
+        "0.0.19",
+        seen_at="2026-08-28T12:00:00",
+    ) is True
+    assert manager.mark_version_seen(
+        "petr",
+        "0.0.22",
+        seen_at="2026-08-28T12:05:00",
+    ) is True
+
+    reloaded = IdentityManager(data_dir=tmp_path)
+    assert reloaded.authenticate("erik", "1234").last_seen_version == "0.0.19"
+    assert reloaded.authenticate("petr", "5678").last_seen_version == "0.0.22"
+    after = json.loads(reloaded.path.read_text(encoding="utf-8"))
+    assert after["profiles"][0]["pin"] == erik_pin
+
+
+def test_older_checkout_cannot_downgrade_profile_last_seen_version(tmp_path):
+    manager = configured_manager(tmp_path)
+    manager.mark_version_seen("erik", "0.0.22")
+
+    assert manager.mark_version_seen("erik", "0.0.21") is False
+    assert manager.authenticate("erik", "1234").last_seen_version == "0.0.22"
+
+
+def test_invalid_last_seen_timestamp_cannot_corrupt_profile_store(tmp_path):
+    manager = configured_manager(tmp_path)
+
+    with pytest.raises(ValueError, match="ISO 8601"):
+        manager.mark_version_seen("erik", "0.0.22", seen_at=12345)
+
+    reloaded = IdentityManager(data_dir=tmp_path)
+    assert reloaded.authenticate("erik", "1234").last_seen_version is None
+
+
+def test_legacy_checkout_pin_and_profile_data_migrate_to_stable_root(tmp_path):
+    legacy_root = tmp_path / "checkout" / "data"
+    stable_root = tmp_path / "appdata" / "ASTRA"
+    legacy = IdentityManager(data_dir=legacy_root)
+    legacy.initialize_pin("petr", "5678")
+    old_note = legacy_root / "users" / "petr" / "long_memory.json"
+    old_note.parent.mkdir(parents=True, exist_ok=True)
+    old_note.write_text('[{"content":"keep me"}]', encoding="utf-8")
+
+    migrated = IdentityManager(
+        data_dir=stable_root,
+        legacy_data_dir=legacy_root,
+    )
+    identity = migrated.authenticate("petr", "5678")
+
+    assert identity.data_dir == stable_root / "users" / "petr"
+    assert (identity.data_dir / "long_memory.json").read_text(encoding="utf-8") == (
+        '[{"content":"keep me"}]'
+    )
+    assert old_note.exists()
+
+
 def test_wrong_pin_is_rejected(tmp_path):
     manager = configured_manager(tmp_path)
     with pytest.raises(AuthenticationError, match="Incorrect PIN"):
@@ -89,6 +177,33 @@ def test_changing_pin_invalidates_the_previous_pin(tmp_path):
     with pytest.raises(AuthenticationError):
         manager.authenticate("erik", "1234")
     assert manager.authenticate("erik", "4321").display_name == "Erik"
+
+
+def test_change_pin_rechecks_current_pin_inside_mutation_transaction(tmp_path):
+    first = configured_manager(tmp_path)
+    second = IdentityManager(data_dir=tmp_path)
+
+    @contextmanager
+    def interleaved_file_lock():
+        second.change_pin("erik", "1234", "2222")
+        yield
+
+    first._file_lock = interleaved_file_lock
+
+    with pytest.raises(AuthenticationError, match="Incorrect PIN"):
+        first.change_pin("erik", "1234", "1111")
+
+    assert IdentityManager(data_dir=tmp_path).authenticate("erik", "2222")
+
+
+def test_last_seen_version_rejects_non_numeric_value_without_rollback(tmp_path):
+    manager = configured_manager(tmp_path)
+    manager.mark_version_seen("petr", "2.0")
+
+    with pytest.raises(ValueError, match="dotted version"):
+        manager.mark_version_seen("petr", "banana")
+
+    assert manager.authenticate("petr", "5678").last_seen_version == "2.0"
 
 
 def test_pin_is_salted_and_hashed_not_stored_as_plaintext(tmp_path):

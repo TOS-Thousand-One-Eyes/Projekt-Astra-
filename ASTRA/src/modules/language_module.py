@@ -17,7 +17,11 @@ class LanguageModule(Module):
         try:
             self.client.ensure_available()
         except urllib.error.HTTPError as error:
-            raise ConnectionError(f"Ollama responded with an error (HTTP {error.code}).") from error
+            status = error.code
+            error.close()
+            raise ConnectionError(
+                f"Ollama responded with an error (HTTP {status})."
+            ) from error
         except OSError as error:
             raise ConnectionError("Ollama not reachable.") from error
         self.available = True

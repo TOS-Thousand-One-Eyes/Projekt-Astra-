@@ -24,14 +24,16 @@ class SpeechManager:
         script = (
             "Add-Type -AssemblyName System.Speech; "
             "$speaker = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-            "$speaker.Speak($args[0])"
+            "$speechText = [Console]::In.ReadToEnd(); "
+            "$speaker.Speak($speechText)"
         )
         try:
             self.runner(
-                ["powershell", "-NoProfile", "-Command", script, clean],
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
                 check=True,
                 capture_output=True,
                 text=True,
+                input=clean,
                 timeout=self.speak_timeout,
             )
         except subprocess.TimeoutExpired as error:
@@ -46,7 +48,7 @@ class SpeechManager:
             raise SpeechError("Speech recognition is currently implemented for Windows System.Speech only.")
         script = (
             "Add-Type -AssemblyName System.Speech; "
-            "$seconds = [double]$args[0]; "
+            "$seconds = [double]([Console]::In.ReadToEnd()); "
             "$culture = [System.Globalization.CultureInfo]::CurrentCulture; "
             "$recognizer = New-Object System.Speech.Recognition.SpeechRecognitionEngine($culture); "
             "$recognizer.LoadGrammar((New-Object System.Speech.Recognition.DictationGrammar)); "
@@ -56,10 +58,11 @@ class SpeechManager:
         )
         try:
             result = self.runner(
-                ["powershell", "-NoProfile", "-Command", script, str(timeout)],
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
                 check=True,
                 capture_output=True,
                 text=True,
+                input=str(timeout),
                 timeout=timeout + self.listen_timeout_grace,
             )
         except subprocess.TimeoutExpired as error:

@@ -1,10 +1,10 @@
 # ASTRA project state
 
-Version: 0.0.21
+Version: 0.0.22
 
 Branch under review: `DEV-need-check`
 
-Remote base commit: `9834f15`
+Remote base commit: `8ad04cd`
 
 Status: `DEV-need-check` review candidate; not released
 
@@ -23,9 +23,12 @@ commands or approval gates.
   self-learning candidates/guidance, reflections, reminders, and actions.
 - Ollama language fallback is optional and model calls are serialized so a shared
   text/vision model is never called concurrently by chat and Eyes.
-- Runtime/package/config version values are synchronized at `0.0.21`.
+- Runtime/package/config version values are synchronized at `0.0.22`.
 - Local profiles `Erik` and `Petr` authenticate with separately salted PIN
-  hashes and use isolated persistent runtime directories.
+  hashes and use isolated persistent runtime directories under the operating
+  system's per-user application-data root.
+- Each profile persists its own last-seen ASTRA version and receives one
+  deterministic changelog briefing after a successful login on a newer build.
 
 ## Learning layers
 
@@ -94,6 +97,11 @@ Long memory and facts now use locked read/modify/write operations plus
 process/thread/UUID-unique temporary paths. Concurrent GUI/background writes no
 longer collide on the same temporary file.
 
+Identity data uses an update-safe root (`%LOCALAPPDATA%\ASTRA` on Windows, or
+`ASTRA_DATA_DIR` when explicitly set). Profile mutations reload current state,
+use an operating-system file lock across processes, and atomically replace the
+validated store so concurrent CLI/GUI sessions do not lose PIN or version data.
+
 ## Profile backups
 
 - `backup create [label]` creates a ZIP from the active profile's persistent
@@ -112,8 +120,12 @@ longer collide on the same temporary file.
 - PINs are PBKDF2-SHA256 hashed with independent random salts and never enter chat.
 - Corrupt PIN metadata fails closed, including an excessive work factor that
   could otherwise stall authentication.
-- Personal stores live under `data/users/erik` or `data/users/petr`.
-- Pre-profile data is copied to Erik once without deleting the recoverable originals.
+- Personal stores live under `<ASTRA_DATA_DIR>/users/erik` or
+  `<ASTRA_DATA_DIR>/users/petr`, outside the replaceable source checkout.
+- Existing source-relative profile data is copied forward once without deleting
+  the recoverable originals; pre-profile data remains assigned only to Erik.
+- PIN and last-seen version metadata are linked to the same explicit profile
+  record. A version acknowledgement never rewrites the PIN hash.
 - The GUI hides chat and stops Brain/Eyes when locked or switching users.
 - Automatic lock defaults to 15 minutes and waits for an active model/command worker
   to finish before stopping the runtime.
@@ -129,19 +141,20 @@ longer collide on the same temporary file.
   Actions secret is configured.
 - Concrete features/fixes come from `docs/CHANGELOG_PENDING_<version>.md`; push
   metadata and the comparison link remain attached.
-- Slack changelog generation uses only repository/GitHub event data and Python
-  stdlib; it consumes no AI tokens and redacts common secret-like strings.
+- Slack changelog generation uses repository/GitHub event data plus a local
+  argument-safe Git diff and Python stdlib; it consumes no AI tokens and
+  redacts common secret-like strings.
 - Setup: `docs/SLACK_CHANGELOG_SETUP.md`.
 
 ## Verification state
 
-- Full local suite: **492 passed** with warnings treated as errors; repeated with
-  a fixed hash seed for the same **492 passed** result.
+- Baseline Python 3.14 warnings-as-errors run exposed one leaked HTTP response:
+  **491 passed, 1 failed**.
+- Current full local suite: **520 passed** with warnings treated as errors.
 - Python compilation: PASS.
-- `git diff --check`: PASS.
-- GitHub confirmed the previous v0.0.20 push ran all five test jobs and posted
-  the token-free Slack changelog successfully.
-- No v0.0.21 GitHub push or release performed.
+- GitHub and Slack confirm v0.0.21 run `33176947047` succeeded and posted to
+  `#changelog`; its incorrect zero-file summary is fixed in v0.0.22.
+- v0.0.22 has not yet been pushed or released.
 
 ## Manual Windows review gates
 
@@ -152,14 +165,15 @@ longer collide on the same temporary file.
 5. Run `eyes once`; inspect whether the result is accurate and private.
 6. Optionally run `eyes on`, exercise real workflows, then confirm `eyes off` stops
    passive observation cleanly.
-7. Set separate PINs for Erik and Petr; verify `who am i`, Lock/switch, chat hiding,
-   and that each profile has separate facts/preferences.
+7. Set separate PINs for Erik and Petr once; restart and update the checkout,
+   then verify login never asks to create either PIN again and update briefings
+   are profile-specific.
 8. Test `self learning preference`, `correction`, `scan`, `review`, `guidance`,
    `health`, approval, rejection, and restart persistence.
 9. Run `backup create before-review`, `backup list`, and `backup verify latest`;
    keep the generated personal ZIP private.
-10. Configure the Slack webhook secret, push a small review commit, and verify
-   the chosen channel receives one versioned changelog with concrete bullets.
+10. Push the v0.0.22 review commit and verify both GitHub workflows plus one
+   Slack message with concrete bullets and a non-zero changed-file count.
 11. Review the diff before any commit, push, or merge.
 
 ## Main source areas

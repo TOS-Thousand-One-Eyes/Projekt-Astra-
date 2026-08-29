@@ -24,16 +24,17 @@ def png_bytes(width=2, height=3):
     )
 
 
-def test_speech_manager_invokes_windows_sapi_runner():
+def test_speech_manager_passes_text_to_windows_sapi_over_stdin():
     calls = []
 
-    def runner(args, check, capture_output, text, timeout):
+    def runner(args, check, capture_output, text, input, timeout):
         calls.append(
             {
                 "args": args,
                 "check": check,
                 "capture_output": capture_output,
                 "text": text,
+                "input": input,
                 "timeout": timeout,
             }
         )
@@ -44,9 +45,26 @@ def test_speech_manager_invokes_windows_sapi_runner():
 
     assert spoken == "hello there"
     assert calls[0]["args"][0] == "powershell"
-    assert calls[0]["args"][-1] == "hello there"
+    assert calls[0]["args"][-1] != "hello there"
+    assert calls[0]["input"] == "hello there"
     assert calls[0]["check"] is True
     assert calls[0]["timeout"] == 20
+
+
+def test_speech_manager_never_places_untrusted_text_in_powershell_command():
+    calls = []
+
+    def runner(args, **kwargs):
+        calls.append((args, kwargs))
+
+    manager = SpeechManager(runner=runner, system=lambda: "Windows")
+    payload = "; Write-Output ASTRA_INJECTION_SENTINEL"
+
+    manager.speak(payload)
+
+    args, kwargs = calls[0]
+    assert all(payload not in arg for arg in args)
+    assert kwargs["input"] == payload
 
 
 def test_speech_manager_reports_unsupported_platform():
@@ -59,13 +77,14 @@ def test_speech_manager_reports_unsupported_platform():
 def test_speech_manager_listens_once_with_explicit_timeout():
     calls = []
 
-    def runner(args, check, capture_output, text, timeout):
+    def runner(args, check, capture_output, text, input, timeout):
         calls.append(
             {
                 "args": args,
                 "check": check,
                 "capture_output": capture_output,
                 "text": text,
+                "input": input,
                 "timeout": timeout,
             }
         )
@@ -77,15 +96,16 @@ def test_speech_manager_listens_once_with_explicit_timeout():
 
     assert transcript == "System online"
     assert calls[0]["args"][0] == "powershell"
-    assert calls[0]["args"][-1] == "7"
-    assert "SpeechRecognitionEngine" in calls[0]["args"][3]
+    assert "7" not in calls[0]["args"]
+    assert calls[0]["input"] == "7"
+    assert "SpeechRecognitionEngine" in calls[0]["args"][-1]
     assert calls[0]["check"] is True
     assert calls[0]["timeout"] == 12
 
 
 def test_speech_manager_listen_clamps_timeout():
-    def runner(args, check, capture_output, text, timeout):
-        return subprocess.CompletedProcess(args, 0, stdout=args[-1], stderr="")
+    def runner(args, check, capture_output, text, input, timeout):
+        return subprocess.CompletedProcess(args, 0, stdout=input, stderr="")
 
     manager = SpeechManager(runner=runner, system=lambda: "Windows")
 

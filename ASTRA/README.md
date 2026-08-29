@@ -55,10 +55,18 @@ never accepted through chat and is never committed to GitHub. Use `who am i`,
 
 The profiles do not use IP addresses, face recognition, or network identity.
 Personal memory, source-backed learning, self-learning guidance, experiences,
-tasks, system actions, and reminders live under `data/users/<user_id>` so Erik
-and Petr do not silently train each other's profile. Pre-profile runtime data is
-copied to Erik once, without deleting the old files. The GUI shows the active
-profile and provides **Lock / switch** and **Change PIN** buttons.
+tasks, system actions, and reminders live under the per-user application-data
+root (`%LOCALAPPDATA%\ASTRA\users\<user_id>` on Windows) so source updates or a
+fresh checkout do not erase them and Erik and Petr do not silently train each
+other's profile. Set `ASTRA_DATA_DIR` to use an explicit portable location.
+Existing data from the old source-relative `ASTRA/data` location is copied
+forward once without deleting the old files. The GUI shows the active profile
+and provides **Lock / switch** and **Change PIN** buttons.
+
+Each profile records the last ASTRA version it successfully saw. After an
+upgrade, CLI and GUI show that profile a concise summary from the versioned
+project changelogs, then acknowledge the installed version so the same update
+is not repeated. Running an older checkout never rolls this marker backward.
 
 The GUI automatically locks after 15 minutes of inactivity by default, stops
 the runtime and Eyes, and clears the visible chat before another login. Set
@@ -95,7 +103,7 @@ self learning approve <id>
 self learning reject <id>
 ```
 
-Learning subjects are stored in `data/users/<user_id>/learning` and are not promotion-ready until
+Learning subjects are stored in `<ASTRA_DATA_DIR>/users/<user_id>/learning` and are not promotion-ready until
 they have both review approval and a passing eval report.
 `learn deeply about <topic>` creates a proficient-level subject with a compact
 grounded evaluator (normally 6 or 7 cases, depending on usable source coverage).
@@ -185,7 +193,7 @@ switches the runtime client, enables the fallback, and persists the chosen model
 direct prompt to the local model after the same availability check.
 `model recommend-light` reports a lower-HW model candidate. The current light
 recommendation is `gemma3:1b`: it is a text model with an official Ollama size
-below half of the currently configured `llama3.2:3b` model. Install it outside
+below half of the currently configured `gemma3:4b` model. Install it outside
 ASTRA with `ollama pull gemma3:1b`, then switch with `model use gemma3:1b`.
 When the local language module handles normal chat fallback, ASTRA builds a stable
 grounded system prompt from relevant facts, notes, active approved guidance, and
@@ -225,7 +233,7 @@ summary after every push without calling an AI model. Configure the
 ## Experience memory commands
 
 ASTRA records structured user/assistant exchanges in
-`data/users/<user_id>/experience`:
+`<ASTRA_DATA_DIR>/users/<user_id>/experience`:
 
 ```
 experience recent

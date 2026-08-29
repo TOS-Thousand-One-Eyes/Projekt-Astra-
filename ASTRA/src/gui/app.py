@@ -25,7 +25,11 @@ from gui.presenter import (
     should_auto_lock,
     theme_button_label,
 )
-from identity.identity_manager import AuthenticationError, IdentityManager
+from identity.identity_manager import (
+    AuthenticationError,
+    IdentityManager,
+    IdentityStoreError,
+)
 from learning.learning_manager import LearningManager
 from learning.self_learning import SelfLearningManager
 from memory.memory_manager import MemoryManager
@@ -994,7 +998,7 @@ class AstraTkApp:
         )
 
     def restart_runtime(self):
-        if self.worker_running:
+        if self.worker_running or self.model_refresh_running:
             return
         self._set_controls_enabled(
             False
@@ -1082,6 +1086,7 @@ class AstraTkApp:
         if (
             self.model_refresh_running
             or not self.brain
+            or not self.brain.is_running
         ):
             return
         self.model_refresh_running = True
@@ -1329,7 +1334,7 @@ class AstraTkApp:
 
         restart_state = (
             "disabled"
-            if self.worker_running
+            if self.worker_running or self.model_refresh_running
             else "normal"
         )
         self.restart_button.configure(
@@ -1389,7 +1394,26 @@ class AstraTkApp:
                 parent=self.root,
             )
         self.root.withdraw()
-        identity = prompt_gui_identity(self.root, self.identity_manager)
+        try:
+            identity = prompt_gui_identity(self.root, self.identity_manager)
+        except Exception as error:
+            # The old runtime and its private chat are already stopped/cleared.
+            # Do not leave an invisible, unauthenticated window that can be
+            # restarted under the previous identity after a store/login error.
+            try:
+                self.root.deiconify()
+                messagebox.showerror(
+                    "ASTRA identity error",
+                    (
+                        "Profile login failed while ASTRA was locked: "
+                        f"{type(error).__name__}: {error}\n\n"
+                        "ASTRA will close without reopening the previous profile."
+                    ),
+                    parent=self.root,
+                )
+            finally:
+                self.root.destroy()
+            return
         if identity is None:
             self.root.destroy()
             return
@@ -1440,7 +1464,7 @@ class AstraTkApp:
                 current,
                 new_pin,
             )
-        except (AuthenticationError, ValueError) as error:
+        except (AuthenticationError, IdentityStoreError, ValueError) as error:
             messagebox.showerror("PIN change failed", str(error), parent=self.root)
             return
         self._record_activity()

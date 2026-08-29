@@ -1,9 +1,10 @@
 import json
 import os
 import threading
-import uuid
 from datetime import datetime
 from pathlib import Path
+
+from utils.file_store import atomic_json_write, interprocess_file_lock
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 EXPERIENCE_SCHEMA = "astra-experience/exchanges/v1"
@@ -29,7 +30,9 @@ class ExperienceManager:
         source="brain",
         actor_id=None,
     ):
-        with self._lock:
+        with self._lock, interprocess_file_lock(self.path):
+            exchanges = self._read_for_write()
+            self.exchanges = exchanges
             exchange = {
                 "id": self._next_id(),
                 "timestamp": timestamp(),
@@ -40,8 +43,9 @@ class ExperienceManager:
                 "user": str(user_message),
                 "assistant": str(assistant_response),
             }
-            self.exchanges.append(exchange)
-            self._save()
+            exchanges.append(exchange)
+            self._write(exchanges)
+            self.exchanges = exchanges
             return dict(exchange)
 
     def recent(self, limit=5):
@@ -77,34 +81,47 @@ class ExperienceManager:
             }
 
     def _load(self):
-        if not self.path.exists():
-            return []
         try:
-            with open(self.path, "r", encoding="utf-8-sig") as handle:
-                loaded = json.load(handle)
-        except (json.JSONDecodeError, UnicodeDecodeError, OSError) as error:
+            return self._read()
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError, ValueError) as error:
             self.load_warnings.append(
-                f"{self.path.name} could not be loaded ({error}); starting empty."
+                f"{self.path.name} could not be loaded ({error}); "
+                "starting empty in read-only recovery mode."
             )
             return []
+
+    def _read(self):
+        if not self.path.exists():
+            return []
+        with open(self.path, "r", encoding="utf-8-sig") as handle:
+            loaded = json.load(handle)
         if isinstance(loaded, list):
             return [item for item in loaded if isinstance(item, dict)]
         if isinstance(loaded, dict) and isinstance(loaded.get("exchanges"), list):
             return [item for item in loaded["exchanges"] if isinstance(item, dict)]
-        self.load_warnings.append(
-            f"{self.path.name} has an unsupported shape; starting empty."
-        )
-        return []
+        raise ValueError("expected an exchange list or exchanges object")
+
+    def _read_for_write(self):
+        try:
+            return self._read()
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError, ValueError) as error:
+            raise OSError(
+                f"Refusing to overwrite unreadable {self.path.name}: {error}"
+            ) from error
 
     def _save(self):
-        payload = {"schema": EXPERIENCE_SCHEMA, "exchanges": self.exchanges}
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = self.path.with_suffix(
-            f"{self.path.suffix}.{os.getpid()}.{threading.get_ident()}.{uuid.uuid4().hex[:8]}.tmp"
+        with self._lock, interprocess_file_lock(self.path):
+            self._read_for_write()
+            self._write(self.exchanges)
+
+    def _write(self, exchanges):
+        payload = {"schema": EXPERIENCE_SCHEMA, "exchanges": exchanges}
+        atomic_json_write(
+            self.path,
+            payload,
+            replace_func=os.replace,
+            errors="backslashreplace",
         )
-        with open(tmp_path, "w", encoding="utf-8", errors="backslashreplace") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2)
-        os.replace(tmp_path, self.path)
 
     def _next_id(self):
         highest = 0

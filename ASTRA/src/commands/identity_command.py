@@ -36,10 +36,19 @@ class IdentityCommand(Command):
     def _status(self):
         if not self.identity:
             return "Identity profiles are not active in this legacy runtime."
+        last_seen = self.identity.last_seen_version
+        if self.identity_manager:
+            try:
+                last_seen = self.identity_manager.resolve_profile(
+                    self.identity.user_id
+                ).get("last_seen_version")
+            except (KeyError, ValueError):
+                pass
         return (
             "Active identity:\n"
             f"- profile: {self.identity.display_name}\n"
             f"- user id: {self.identity.user_id}\n"
+            f"- last seen version: {last_seen or 'not recorded yet'}\n"
             "- personal runtime data: isolated\n"
             "- PIN: never accepted through chat"
         )
@@ -59,6 +68,7 @@ class IdentityCommand(Command):
                 else ""
             )
             lines.append(
-                f"- {item['display_name']} [{item['id']}]: {configured}{active}"
+                f"- {item['display_name']} [{item['id']}]: {configured}; "
+                f"last seen {item.get('last_seen_version') or 'not recorded'}{active}"
             )
         return "\n".join(lines)

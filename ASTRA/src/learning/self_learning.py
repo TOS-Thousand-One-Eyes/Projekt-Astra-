@@ -14,6 +14,16 @@ CANDIDATE_STATUSES = {"pending", "approved", "rejected"}
 GUIDANCE_TYPES = {"preference", "correction"}
 GUIDANCE_STATUSES = {"active", "inactive"}
 
+_STORE_LOCKS = {}
+_STORE_LOCKS_GUARD = threading.Lock()
+
+
+def _store_lock(path):
+    """Return one in-process lock for every physical self-learning store."""
+    key = os.path.normcase(str(Path(path).resolve()))
+    with _STORE_LOCKS_GUARD:
+        return _STORE_LOCKS.setdefault(key, threading.RLock())
+
 
 class SelfLearningManager:
     """
@@ -32,7 +42,7 @@ class SelfLearningManager:
         self.training_path = self.root / "training_examples.jsonl"
         self.load_warnings = []
         self.integrity_warnings = []
-        self._lock = threading.RLock()
+        self._lock = _store_lock(self.root)
         self._previous_assistant = ""
         self.mode = "review"
         self.set_mode(mode)

@@ -5,6 +5,7 @@ from conftest import StubModule
 from core.brain import Brain
 from experience.experience_manager import ExperienceManager
 from experience.reflection_manager import ReflectionManager
+from identity.identity_manager import IdentityManager, UserIdentity
 from learning.learning_manager import LearningManager
 from learning.self_learning import SelfLearningManager
 from memory.memory_manager import MemoryManager
@@ -197,6 +198,52 @@ class TestUpdateCheck:
     def test_no_check_when_update_checker_is_none(self, running_brain):
         assert running_brain.update_checker is None
 
+    def test_unexpected_update_checker_failure_is_nonfatal(self, config, memory):
+        class FailingUpdateChecker:
+            def check(self):
+                raise RuntimeError("checker boom")
+
+        logger = Logger()
+        brain = Brain(
+            logger,
+            config,
+            memory,
+            Modules(Logger()),
+            update_checker=FailingUpdateChecker(),
+        )
+
+        brain.start()
+
+        assert brain.is_running
+        assert any(
+            "WARNING" in entry
+            and "Update check failed unexpectedly" in entry
+            and "checker boom" in entry
+            for entry in logger.get_logs()
+        )
+
+    def test_unexpected_profile_briefing_failure_is_nonfatal(
+        self, config, memory, monkeypatch
+    ):
+        logger = Logger()
+        brain = Brain(Logger(), config, memory, Modules(Logger()))
+        brain.logger = logger
+
+        def fail_briefing():
+            raise RuntimeError("briefing boom")
+
+        monkeypatch.setattr(brain, "_report_profile_version", fail_briefing)
+
+        brain.start()
+
+        assert brain.is_running
+        assert any(
+            "WARNING" in entry
+            and "Profile version briefing failed" in entry
+            and "briefing boom" in entry
+            for entry in logger.get_logs()
+        )
+
 
 class TestModulesLifecycle:
 
@@ -240,6 +287,52 @@ class TestModulesLifecycle:
         brain = Brain(Logger(), config, memory, modules)
         brain.start()
         assert stub.started is True
+
+    def test_brain_logs_successful_module_count_not_registered_count(self, config, memory):
+        logger = Logger()
+        modules = Modules(logger)
+        modules.add_module(FailingModule())
+        modules.add_module(StubModule())
+        brain = Brain(logger, config, memory, modules)
+
+        brain.start()
+        brain.stop()
+
+        assert any("Modules started: 1/2." in entry for entry in logger.get_logs())
+        assert any("Modules stopped: 1/2." in entry for entry in logger.get_logs())
+
+
+class TestLanguageFallbackContainment:
+
+    def test_context_builder_failure_returns_logged_error_instead_of_escaping(self):
+        class AvailableLanguageModule:
+            available = True
+
+            def respond(self, _prompt):
+                raise AssertionError("respond must not run without a prompt")
+
+        def fail_context(_message, _memory):
+            raise RuntimeError("context boom")
+
+        logger = Logger()
+        registry = CommandRegistry(
+            [],
+            language_module=AvailableLanguageModule(),
+            memory=object(),
+            context_builder=fail_context,
+            logger=logger,
+        )
+
+        result = registry.dispatch("hello")
+
+        assert result.command_name == "LanguageModule"
+        assert "preparing the local model context" in result.response
+        assert any(
+            "ERROR" in entry
+            and "Language fallback failed" in entry
+            and "context boom" in entry
+            for entry in logger.get_logs()
+        )
 
 
 class TestCommands:
@@ -896,6 +989,98 @@ class TestStartupBriefing:
         brain.start()
         logs = brain.logger.get_logs()
         assert any("WARNING" in entry and "long_memory.json" in entry for entry in logs)
+
+
+class TestProfileVersionBriefing:
+
+    def build_profile_brain(self, tmp_path, config, last_seen="0.0.21", logger=None):
+        manager = IdentityManager(data_dir=tmp_path / "private")
+        manager.initialize_pin("petr", "5678")
+        if last_seen is not None:
+            manager.mark_version_seen("petr", last_seen)
+        identity = manager.authenticate("petr", "5678")
+        config.version = "0.0.22"
+        memory = MemoryManager(data_dir=identity.data_dir)
+        logger = logger or Logger()
+        brain = Brain(
+            logger,
+            config,
+            memory,
+            Modules(Logger()),
+            identity=identity,
+            identity_manager=manager,
+        )
+        return brain, manager
+
+    def test_upgrade_notice_is_visible_and_acknowledged(self, tmp_path, config):
+        brain, manager = self.build_profile_brain(tmp_path, config)
+
+        brain.start()
+
+        assert any(
+            "CHAT" in entry
+            and "Last seen on ASTRA v0.0.21" in entry
+            and "installed version is now v0.0.22" in entry
+            for entry in brain.logger.get_logs()
+        )
+        assert manager.resolve_profile("petr")["last_seen_version"] == "0.0.22"
+
+    def test_upgrade_notice_is_visible_even_at_error_log_level(self, tmp_path, config):
+        brain, _manager = self.build_profile_brain(
+            tmp_path,
+            config,
+            logger=Logger(level="ERROR"),
+        )
+
+        brain.start()
+
+        assert any(
+            "CHAT" in entry and "Last seen on ASTRA v0.0.21" in entry
+            for entry in brain.logger.get_logs()
+        )
+
+    def test_same_version_does_not_repeat_upgrade_notice(self, tmp_path, config):
+        brain, manager = self.build_profile_brain(tmp_path, config)
+        brain.start()
+        brain.stop()
+        identity = manager.authenticate("petr", "5678")
+        second_logger = Logger()
+        second = Brain(
+            second_logger,
+            config,
+            MemoryManager(data_dir=identity.data_dir),
+            Modules(Logger()),
+            identity=identity,
+            identity_manager=manager,
+        )
+
+        second.start()
+
+        assert not any("What's new" in entry for entry in second_logger.get_logs())
+
+    def test_acknowledgement_failure_does_not_stop_runtime(self, tmp_path, config, monkeypatch):
+        brain, manager = self.build_profile_brain(tmp_path, config)
+
+        def fail_mark(*_args, **_kwargs):
+            raise OSError("disk locked")
+
+        monkeypatch.setattr(manager, "mark_version_seen", fail_mark)
+        brain.start()
+
+        assert brain.is_running
+        assert any(
+            "WARNING" in entry and "last-seen version" in entry and "disk locked" in entry
+            for entry in brain.logger.get_logs()
+        )
+        assert manager.resolve_profile("petr")["last_seen_version"] == "0.0.21"
+
+    def test_first_profile_session_records_current_version(self, tmp_path, config):
+        brain, manager = self.build_profile_brain(tmp_path, config, last_seen=None)
+
+        brain.start()
+
+        assert any("first recorded on ASTRA v0.0.22" in entry for entry in brain.logger.get_logs())
+        assert manager.resolve_profile("petr")["last_seen_version"] == "0.0.22"
 
 
 class TestChatVisibility:

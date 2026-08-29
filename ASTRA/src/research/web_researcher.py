@@ -1,5 +1,6 @@
 import json
 import re
+import urllib.error
 import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
@@ -191,7 +192,11 @@ def search_wikipedia_fulltext(query, max_results=DEFAULT_MAX_RESULTS, opener=Non
 
 
 def read_bounded_response(open_url, request, limit):
-    response = open_url(request, timeout=10)
+    try:
+        response = open_url(request, timeout=10)
+    except urllib.error.HTTPError as error:
+        error.close()
+        raise
     try:
         return response.read(limit)
     finally:

@@ -7,12 +7,13 @@ import secrets
 import shutil
 import threading
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from utils.app_paths import LEGACY_DATA_DIR, default_data_dir
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 IDENTITY_SCHEMA = "astra-identity/profiles/v1"
 PBKDF2_ITERATIONS = 310_000
 MAX_PBKDF2_ITERATIONS = 2_000_000
@@ -28,6 +29,7 @@ LEGACY_PRIVATE_DIRS = (
     "learning",
     "self_learning",
 )
+_IDENTITY_STORE_LOCK = threading.RLock()
 
 
 class IdentityStoreError(RuntimeError):
@@ -47,6 +49,8 @@ class UserIdentity:
     user_id: str
     display_name: str
     data_dir: Path
+    last_seen_version: str | None = None
+    last_seen_at: str | None = None
 
 
 class IdentityManager:
@@ -58,25 +62,42 @@ class IdentityManager:
     administrator can still read the local files.
     """
 
-    def __init__(self, data_dir=DATA_DIR, profiles=DEFAULT_PROFILES):
-        self.data_dir = Path(data_dir)
+    def __init__(
+        self,
+        data_dir=None,
+        profiles=DEFAULT_PROFILES,
+        legacy_data_dir=None,
+    ):
+        explicit_data_dir = data_dir is not None
+        self.data_dir = Path(data_dir) if explicit_data_dir else default_data_dir()
+        self.legacy_data_dir = (
+            Path(legacy_data_dir)
+            if legacy_data_dir is not None
+            else (self.data_dir if explicit_data_dir else LEGACY_DATA_DIR)
+        )
         self.root = self.data_dir / "identity"
         self.users_root = self.data_dir / "users"
         self.path = self.root / "profiles.json"
+        self.lock_path = self.root / "profiles.lock"
         self.migration_path = self.root / "legacy_migrations.json"
         self._lock = threading.RLock()
         self._default_profiles = tuple(profiles)
         self.root.mkdir(parents=True, exist_ok=True)
         self.users_root.mkdir(parents=True, exist_ok=True)
-        self._payload = self._load_or_create()
+        with _IDENTITY_STORE_LOCK, self._lock, self._file_lock():
+            self._migrate_legacy_identity_store()
+            self._payload = self._load_or_create()
 
     def list_profiles(self):
-        with self._lock:
+        with _IDENTITY_STORE_LOCK, self._lock, self._file_lock():
+            self._reload_payload()
             return [
                 {
                     "id": item["id"],
                     "display_name": item["display_name"],
                     "pin_configured": bool(item.get("pin")),
+                    "last_seen_version": item.get("last_seen_version"),
+                    "last_seen_at": item.get("last_seen_at"),
                 }
                 for item in self._payload["profiles"]
             ]
@@ -85,19 +106,23 @@ class IdentityManager:
         query = str(value or "").strip().casefold()
         if not query:
             raise KeyError("Profile name cannot be empty.")
-        with self._lock:
+        with _IDENTITY_STORE_LOCK, self._lock, self._file_lock():
+            self._reload_payload()
             for item in self._payload["profiles"]:
                 if query in {item["id"].casefold(), item["display_name"].casefold()}:
                     return {
                         "id": item["id"],
                         "display_name": item["display_name"],
                         "pin_configured": bool(item.get("pin")),
+                        "last_seen_version": item.get("last_seen_version"),
+                        "last_seen_at": item.get("last_seen_at"),
                     }
         raise KeyError(f"Unknown profile: {value}")
 
     def initialize_pin(self, user_id, pin):
         clean_pin = self._validate_pin(pin)
-        with self._lock:
+        with _IDENTITY_STORE_LOCK, self._lock, self._file_lock():
+            self._reload_payload()
             profile = self._profile(user_id)
             if profile.get("pin"):
                 raise IdentityStoreError(
@@ -109,24 +134,18 @@ class IdentityManager:
             return self._public_profile(profile)
 
     def authenticate(self, user_id, pin):
-        with self._lock:
+        with _IDENTITY_STORE_LOCK, self._lock:
+            self._reload_payload()
             profile = self._profile(user_id)
-            pin_record = profile.get("pin")
-            if not pin_record:
-                raise PinNotConfiguredError(
-                    f"{profile['display_name']} needs a PIN before login."
-                )
-            supplied = self._derive_pin(str(pin), pin_record)
-            expected = str(pin_record.get("hash", ""))
-            if not expected or not hmac.compare_digest(supplied, expected):
-                raise AuthenticationError("Incorrect PIN.")
+            self._verify_profile_pin(profile, pin)
             return self._open_session(profile)
 
     def change_pin(self, user_id, current_pin, new_pin):
-        self.authenticate(user_id, current_pin)
         clean_pin = self._validate_pin(new_pin)
-        with self._lock:
+        with _IDENTITY_STORE_LOCK, self._lock, self._file_lock():
+            self._reload_payload()
             profile = self._profile(user_id)
+            self._verify_profile_pin(profile, current_pin)
             profile["pin"] = self._hash_pin(clean_pin)
             profile["updated"] = timestamp()
             self._save_payload()
@@ -134,13 +153,29 @@ class IdentityManager:
 
     def session_after_setup(self, user_id):
         """Open a session immediately after initialize_pin verified both entries."""
-        with self._lock:
+        with _IDENTITY_STORE_LOCK, self._lock:
+            self._reload_payload()
             profile = self._profile(user_id)
             if not profile.get("pin"):
                 raise PinNotConfiguredError(
                     f"{profile['display_name']} needs a PIN before login."
                 )
             return self._open_session(profile)
+
+    def mark_version_seen(self, user_id, version, seen_at=None):
+        clean_version = self._validate_version(version)
+        clean_seen_at = self._validate_seen_at(seen_at)
+        with _IDENTITY_STORE_LOCK, self._lock, self._file_lock():
+            self._reload_payload()
+            profile = self._profile(user_id)
+            previous = profile.get("last_seen_version")
+            if version_is_newer(previous, clean_version):
+                return False
+            profile["last_seen_version"] = clean_version
+            profile["last_seen_at"] = clean_seen_at
+            profile["updated"] = timestamp()
+            self._save_payload()
+            return True
 
     def migrate_legacy_data(self, user_id="erik"):
         """
@@ -150,37 +185,48 @@ class IdentityManager:
         Existing destination files are never overwritten.
         """
         normalized = self._normalize_id(user_id)
-        if normalized != "erik":
-            return []
-        with self._lock:
+        with _IDENTITY_STORE_LOCK, self._lock, self._file_lock():
             migrations = self._load_migrations()
-            if migrations.get("legacy_private_data_to_erik_v1"):
+            marker = f"legacy_project_data_to_{normalized}_v2"
+            if migrations.get(marker):
                 return []
 
             target_root = self.users_root / normalized
             target_root.mkdir(parents=True, exist_ok=True)
             copied = []
-            for name in LEGACY_PRIVATE_FILES:
-                source = self.data_dir / name
-                target = target_root / name
-                if source.is_file() and not target.exists():
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(source, target)
-                    copied.append(name)
-
-            for name in LEGACY_PRIVATE_DIRS:
-                source = self.data_dir / name
-                target = target_root / name
-                if source.is_dir():
-                    copied.extend(
-                        str(Path(name) / relative)
-                        for relative in self._copy_missing_tree(source, target)
+            old_profile_root = self.legacy_data_dir / "users" / normalized
+            if old_profile_root != target_root and old_profile_root.is_dir():
+                copied.extend(
+                    str(Path("users") / normalized / relative)
+                    for relative in self._copy_missing_tree(
+                        old_profile_root,
+                        target_root,
                     )
+                )
 
-            migrations["legacy_private_data_to_erik_v1"] = {
+            if normalized == "erik":
+                for name in LEGACY_PRIVATE_FILES:
+                    source = self.legacy_data_dir / name
+                    target = target_root / name
+                    if source.is_file() and not source.is_symlink() and not target.exists():
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(source, target)
+                        copied.append(name)
+
+                for name in LEGACY_PRIVATE_DIRS:
+                    source = self.legacy_data_dir / name
+                    target = target_root / name
+                    if source.is_dir() and not source.is_symlink():
+                        copied.extend(
+                            str(Path(name) / relative)
+                            for relative in self._copy_missing_tree(source, target)
+                        )
+
+            migrations[marker] = {
                 "completed": timestamp(),
                 "copied": copied,
                 "originals_retained": True,
+                "source": str(self.legacy_data_dir),
             }
             self._atomic_json_write(self.migration_path, migrations)
             return copied
@@ -193,7 +239,19 @@ class IdentityManager:
             user_id=profile["id"],
             display_name=profile["display_name"],
             data_dir=profile_dir,
+            last_seen_version=profile.get("last_seen_version"),
+            last_seen_at=profile.get("last_seen_at"),
         )
+
+    def _migrate_legacy_identity_store(self):
+        if self.path.exists():
+            return False
+        legacy_path = self.legacy_data_dir / "identity" / "profiles.json"
+        if legacy_path == self.path or not legacy_path.is_file() or legacy_path.is_symlink():
+            return False
+        payload = self._validate_payload(self._read_json(legacy_path))
+        self._atomic_json_write(self.path, payload)
+        return True
 
     def _load_or_create(self):
         if self.path.exists():
@@ -217,6 +275,10 @@ class IdentityManager:
         self._payload = payload
         self._save_payload()
         return payload
+
+    def _reload_payload(self):
+        if self.path.exists():
+            self._payload = self._validate_payload(self._read_json(self.path))
 
     def _validate_payload(self, payload):
         if not isinstance(payload, dict) or payload.get("schema") != IDENTITY_SCHEMA:
@@ -244,6 +306,12 @@ class IdentityManager:
                 raise IdentityStoreError(
                     f"PIN record for {display_name} is invalid; refusing an unsafe reset."
                 )
+            for key in ("last_seen_version", "last_seen_at"):
+                value = profile.get(key)
+                if value is not None and not isinstance(value, str):
+                    raise IdentityStoreError(
+                        f"Identity profile {key} for {display_name} is invalid."
+                    )
         return payload
 
     def _profile(self, user_id):
@@ -253,12 +321,25 @@ class IdentityManager:
                 return item
         raise KeyError(f"Unknown profile: {user_id}")
 
+    def _verify_profile_pin(self, profile, pin):
+        pin_record = profile.get("pin")
+        if not pin_record:
+            raise PinNotConfiguredError(
+                f"{profile['display_name']} needs a PIN before login."
+            )
+        supplied = self._derive_pin(str(pin), pin_record)
+        expected = str(pin_record.get("hash", ""))
+        if not expected or not hmac.compare_digest(supplied, expected):
+            raise AuthenticationError("Incorrect PIN.")
+
     @staticmethod
     def _public_profile(profile):
         return {
             "id": profile["id"],
             "display_name": profile["display_name"],
             "pin_configured": bool(profile.get("pin")),
+            "last_seen_version": profile.get("last_seen_version"),
+            "last_seen_at": profile.get("last_seen_at"),
         }
 
     @staticmethod
@@ -273,6 +354,28 @@ class IdentityManager:
         text = str(pin or "")
         if not re.fullmatch(r"\d{4,12}", text):
             raise ValueError("PIN must contain 4 to 12 digits.")
+        return text
+
+    @staticmethod
+    def _validate_version(version):
+        text = str(version or "").strip()
+        if len(text) > 64 or not re.fullmatch(r"\d+(?:\.\d+)*", text):
+            raise ValueError("Version must be a short dotted version identifier.")
+        return ".".join(str(int(part)) for part in text.split("."))
+
+    @staticmethod
+    def _validate_seen_at(value):
+        if value is None:
+            return timestamp()
+        if not isinstance(value, str):
+            raise ValueError("Seen-at timestamp must be an ISO 8601 string.")
+        text = value.strip()
+        if not text or len(text) > 64:
+            raise ValueError("Seen-at timestamp must be an ISO 8601 string.")
+        try:
+            datetime.fromisoformat(text)
+        except ValueError as error:
+            raise ValueError("Seen-at timestamp must be an ISO 8601 string.") from error
         return text
 
     @staticmethod
@@ -328,6 +431,17 @@ class IdentityManager:
     def _save_payload(self):
         self._atomic_json_write(self.path, self._payload)
 
+    @contextmanager
+    def _file_lock(self):
+        """Serialize profile mutations across CLI/GUI processes."""
+        self.lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.lock_path, "a+b") as handle:
+            lock_file_handle(handle)
+            try:
+                yield
+            finally:
+                unlock_file_handle(handle)
+
     def _load_migrations(self):
         if not self.migration_path.exists():
             return {}
@@ -352,6 +466,8 @@ class IdentityManager:
         for item in source.rglob("*"):
             relative = item.relative_to(source)
             destination = target / relative
+            if item.is_symlink():
+                continue
             if item.is_dir():
                 destination.mkdir(parents=True, exist_ok=True)
             elif item.is_file() and not destination.exists():
@@ -382,3 +498,49 @@ class IdentityManager:
 
 def timestamp():
     return datetime.now().isoformat(timespec="seconds")
+
+
+def version_is_newer(candidate, reference):
+    candidate_parts = numeric_version(candidate)
+    reference_parts = numeric_version(reference)
+    if candidate_parts is None or reference_parts is None:
+        return False
+    width = max(len(candidate_parts), len(reference_parts))
+    candidate_parts += (0,) * (width - len(candidate_parts))
+    reference_parts += (0,) * (width - len(reference_parts))
+    return candidate_parts > reference_parts
+
+
+def numeric_version(value):
+    text = str(value or "").strip()
+    if not text or not re.fullmatch(r"\d+(?:\.\d+)*", text):
+        return None
+    return tuple(int(part) for part in text.split("."))
+
+
+def lock_file_handle(handle):
+    handle.seek(0, os.SEEK_END)
+    if handle.tell() == 0:
+        handle.write(b"\0")
+        handle.flush()
+    handle.seek(0)
+    if os.name == "nt":
+        import msvcrt
+
+        msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+
+
+def unlock_file_handle(handle):
+    handle.seek(0)
+    if os.name == "nt":
+        import msvcrt
+
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)

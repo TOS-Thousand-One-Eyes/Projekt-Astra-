@@ -1,4 +1,6 @@
+import hashlib
 import json
+import threading
 
 import pytest
 
@@ -97,6 +99,20 @@ def test_slugify_non_latin_subjects_do_not_collide():
     assert slugify("東京").startswith("learning-")
 
 
+def test_colliding_latin_slugs_keep_subjects_in_separate_files(tmp_path):
+    learning = LearningManager(tmp_path)
+
+    first = learning.learn("C++", source_candidates=[two_sources()[0]])
+    second = learning.learn("C#", source_candidates=[two_sources()[1]])
+
+    assert first["slug"] != second["slug"]
+    assert learning.get("C++")["subject"] == "C++"
+    assert learning.get("C#")["subject"] == "C#"
+    assert [item["source"] for item in learning.get("C++")["sources"]] == ["web:alpha"]
+    assert [item["source"] for item in learning.get("C#")["sources"]] == ["web:beta"]
+    assert len(list((tmp_path / "learning").glob("*.json"))) == 2
+
+
 def test_tokenize_is_unicode_aware():
     assert "東京" in tokenize("東京 旅行")
     assert "привет" in tokenize("Привет мир")
@@ -170,6 +186,65 @@ def test_new_source_invalidates_eval_review_and_promotion(tmp_path):
     assert after["promotion_ready"] is False
     assert after["promoted_at"] is None
     assert after["promotion_revision"] is None
+
+
+def test_hand_edited_source_content_invalidates_stale_hash_and_promotion(tmp_path):
+    learning = LearningManager(tmp_path)
+    payload = learning.learn("Python", source_candidates=[two_sources()[0]])
+    assert learning.evaluate_responses("Python", valid_eval_responses(payload))["passed_gate"]
+    learning.approve("Python")
+    promoted = learning.promote("Python")
+
+    path = learning._subject_path(promoted["slug"])
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    stored["sources"][0]["content"] = (
+        "Tampered material must not inherit an earlier evaluation or promotion. " * 2
+    )
+    stale_hash = stored["sources"][0]["sha256"]
+    path.write_text(json.dumps(stored), encoding="utf-8")
+
+    repaired = learning.get("Python")
+    expected_hash = hashlib.sha256(
+        repaired["sources"][0]["content"].encode("utf-8")
+    ).hexdigest()
+    assert repaired["sources"][0]["sha256"] == expected_hash
+    assert repaired["sources"][0]["sha256"] != stale_hash
+    assert repaired["eval_report"] is None
+    assert repaired["review_status"] == "not-reviewed"
+    assert repaired["promoted_at"] is None
+    assert learning.search("Tampered material", promoted_only=True) == []
+
+
+def test_learning_managers_for_same_store_share_lock_and_preserve_updates(tmp_path):
+    first = LearningManager(tmp_path)
+    second = LearningManager(tmp_path)
+    assert first._lock is second._lock
+
+    barrier = threading.Barrier(3)
+
+    def add(manager, source):
+        barrier.wait()
+        manager.add_source(
+            "Concurrency",
+            f"{source} provides distinct source material for concurrent persistence. " * 2,
+            source=source,
+            confidence="high",
+        )
+
+    threads = [
+        threading.Thread(target=add, args=(first, "thread:first")),
+        threading.Thread(target=add, args=(second, "thread:second")),
+    ]
+    for thread in threads:
+        thread.start()
+    barrier.wait()
+    for thread in threads:
+        thread.join()
+
+    assert {item["source"] for item in first.get("Concurrency")["sources"]} == {
+        "thread:first",
+        "thread:second",
+    }
 
 
 def test_v2_thirteen_case_file_migrates_and_invalidates_old_validation(tmp_path):

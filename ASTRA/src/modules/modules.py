@@ -11,18 +11,26 @@ class Modules:
         return self.modules
 
     def start_all(self):
+        started = 0
         for module in self.modules:
             try:
                 module.start()
             except Exception as error:
                 self.logger.error(f"Module '{self._module_name(module)}' failed to start: {error}")
+            else:
+                started += 1
+        return started
 
     def stop_all(self):
+        stopped = 0
         for module in self.modules:
             try:
                 module.stop()
             except Exception as error:
                 self.logger.error(f"Module '{self._module_name(module)}' failed to stop: {error}")
+            else:
+                stopped += 1
+        return stopped
 
     @staticmethod
     def _module_name(module):

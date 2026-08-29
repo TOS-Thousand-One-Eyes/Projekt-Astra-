@@ -21,6 +21,16 @@ MAX_PROMOTION_NOTE_CHARS = 2400
 TARGET_LEVELS = {"working", "proficient"}
 SOURCE_CONFIDENCE = {"low", "medium", "high"}
 
+_STORE_LOCKS = {}
+_STORE_LOCKS_GUARD = threading.Lock()
+
+
+def _store_lock(path):
+    """Return one in-process lock for every physical learning-store path."""
+    key = os.path.normcase(str(Path(path).resolve()))
+    with _STORE_LOCKS_GUARD:
+        return _STORE_LOCKS.setdefault(key, threading.RLock())
+
 
 class LearningManager:
     """Persistent, source-backed learning workspace with grounded evaluation."""
@@ -30,7 +40,7 @@ class LearningManager:
         self.root.mkdir(parents=True, exist_ok=True)
         self.language_module = language_module
         self.load_warnings = []
-        self._lock = threading.RLock()
+        self._lock = _store_lock(self.root)
 
     def set_language_module(self, language_module):
         self.language_module = language_module
@@ -56,7 +66,7 @@ class LearningManager:
             )
 
         with self._lock:
-            slug = slugify(subject)
+            slug = self._resolve_subject_slug(subject)
             payload = self._load_or_new(subject, slug)
             before_revision = self._content_revision(payload)
 
@@ -113,7 +123,7 @@ class LearningManager:
             raise ValueError("Learning subject cannot be empty.")
 
         with self._lock:
-            slug = slugify(subject)
+            slug = self._resolve_subject_slug(subject)
             payload = self._load_or_new(subject, slug)
             before_revision = self._content_revision(payload)
             added = self._append_source(payload, content, source, confidence)
@@ -141,12 +151,16 @@ class LearningManager:
             return payload
 
     def get(self, subject):
-        path = self._subject_path(slugify(subject))
-        if not path.exists():
-            return None
         with self._lock:
+            slug = self._resolve_subject_slug(subject)
+            path = self._subject_path(slug)
+            if not path.exists():
+                return None
             payload = self._read(path)
             payload, changed = self._migrate(payload)
+            if payload.get("slug") != slug:
+                payload["slug"] = slug
+                changed = True
             if changed:
                 self._save(path, payload)
             return payload
@@ -162,6 +176,9 @@ class LearningManager:
                         f"{path.name} could not be loaded ({error}); skipping this learning subject."
                     )
                     continue
+                if payload.get("slug") != path.stem:
+                    payload["slug"] = path.stem
+                    changed = True
                 if changed:
                     self._save(path, payload)
                 report = payload.get("eval_report") or {}
@@ -277,6 +294,9 @@ class LearningManager:
                         f"{path.name} could not be searched ({error}); skipping this learning subject."
                     )
                     continue
+                if payload.get("slug") != path.stem:
+                    payload["slug"] = path.stem
+                    changed = True
                 if changed:
                     self._save(path, payload)
                 if promoted_only and not self._is_currently_promoted(payload):
@@ -925,13 +945,14 @@ class LearningManager:
             str(payload.get("target_level", "working")),
         ]
         for source in payload.get("sources", []):
+            content_hash = hashlib.sha256(
+                str(source.get("content", "")).encode("utf-8", errors="replace")
+            ).hexdigest()
             parts.extend(
                 [
                     str(source.get("id", "")),
                     str(source.get("source", "")),
-                    str(source.get("sha256") or hashlib.sha256(
-                        str(source.get("content", "")).encode("utf-8", errors="replace")
-                    ).hexdigest()),
+                    content_hash,
                 ]
             )
         return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
@@ -955,10 +976,39 @@ class LearningManager:
     def _subject_path(self, slug):
         return self.root / f"{slug}.json"
 
+    def _resolve_subject_slug(self, subject):
+        """Keep legacy filenames while separating subjects with the same slug."""
+        base_slug = slugify(subject)
+        base_path = self._subject_path(base_slug)
+        if base_path.exists():
+            try:
+                stored = self._read(base_path)
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                # Preserve the historical behavior: get() should surface damage
+                # in the expected legacy file instead of silently shadowing it.
+                return base_slug
+            if _same_subject(stored.get("subject"), subject):
+                return base_slug
+
+        collision_slug = _collision_slug(subject, base_slug)
+        collision_path = self._subject_path(collision_slug)
+        if collision_path.exists():
+            try:
+                stored = self._read(collision_path)
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                return collision_slug
+            if _same_subject(stored.get("subject"), subject):
+                return collision_slug
+
+        return collision_slug if base_path.exists() else base_slug
+
     def _load_or_new(self, subject, slug):
         path = self._subject_path(slug)
         if path.exists():
             payload, changed = self._migrate(self._read(path))
+            if payload.get("slug") != slug:
+                payload["slug"] = slug
+                changed = True
             if changed:
                 self._save(path, payload)
             return payload
@@ -1017,10 +1067,12 @@ class LearningManager:
             source["confidence"] = confidence
             content = str(source.get("content", ""))
             source["content"] = content
-            source.setdefault(
-                "sha256",
-                hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest(),
-            )
+            content_hash = hashlib.sha256(
+                content.encode("utf-8", errors="replace")
+            ).hexdigest()
+            if source.get("sha256") != content_hash:
+                source["sha256"] = content_hash
+                changed = True
             normalized_sources.append(source)
         if normalized_sources != payload["sources"]:
             payload["sources"] = normalized_sources
@@ -1140,6 +1192,16 @@ def slugify(value):
         return slug
     digest = hashlib.sha256(raw.casefold().encode("utf-8", errors="replace")).hexdigest()[:10]
     return f"learning-{digest}"
+
+
+def _same_subject(left, right):
+    return normalize_text(clean_text(left)) == normalize_text(clean_text(right))
+
+
+def _collision_slug(subject, base_slug):
+    identity = normalize_text(clean_text(subject))
+    digest = hashlib.sha256(identity.encode("utf-8", errors="replace")).hexdigest()[:10]
+    return f"{base_slug}-{digest}"
 
 
 def timestamp():

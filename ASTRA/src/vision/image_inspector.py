@@ -33,9 +33,14 @@ def inspect_header(header, handle):
     if header.startswith(b"\x89PNG\r\n\x1a\n") and len(header) >= 24:
         width, height = struct.unpack(">II", header[16:24])
         return "PNG", width, height
-    if header.startswith(b"GIF87a") or header.startswith(b"GIF89a"):
+    if (
+        header.startswith(b"GIF87a")
+        or header.startswith(b"GIF89a")
+    ) and len(header) >= 10:
         width, height = struct.unpack("<HH", header[6:10])
         return "GIF", width, height
+    if header.startswith(b"GIF87a") or header.startswith(b"GIF89a"):
+        raise ImageInspectionError("Truncated GIF header.")
     if header.startswith(b"\xff\xd8"):
         width, height = inspect_jpeg(handle)
         return "JPEG", width, height

@@ -23,17 +23,24 @@ def fetch_url(url, opener=None, timeout=DEFAULT_TIMEOUT, max_bytes=DEFAULT_MAX_B
         headers={"User-Agent": "ASTRA local assistant"},
     )
     open_url = opener or urllib.request.urlopen
+    response = None
     try:
         response = open_url(request, timeout=timeout)
         raw = response.read(max_bytes + 1)
+        headers = getattr(response, "headers", None)
+        content_type = get_header(headers, "Content-Type") or "unknown"
+        charset = header_charset(headers) or "utf-8"
+    except urllib.error.HTTPError as error:
+        error.close()
+        raise WebFetchError(f"Could not fetch URL: {error}") from error
     except (OSError, urllib.error.URLError) as error:
         raise WebFetchError(f"Could not fetch URL: {error}") from error
+    finally:
+        if response is not None:
+            response.close()
 
     truncated = len(raw) > max_bytes
     raw = raw[:max_bytes]
-    headers = getattr(response, "headers", None)
-    content_type = get_header(headers, "Content-Type") or "unknown"
-    charset = header_charset(headers) or "utf-8"
     text = raw.decode(charset, errors="replace")
     if "html" in content_type.lower() or looks_like_html(text):
         text = html_to_text(text)

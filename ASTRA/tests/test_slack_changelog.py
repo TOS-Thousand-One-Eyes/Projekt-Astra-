@@ -13,6 +13,8 @@ SPEC.loader.exec_module(MODULE)
 
 def push_event():
     return {
+        "before": "a" * 40,
+        "after": "b" * 40,
         "ref": "refs/heads/DEV-need-check",
         "compare": "https://github.com/example/astra/compare/a...b",
         "pusher": {"name": "Erik"},
@@ -68,7 +70,115 @@ def test_build_payload_leads_with_versioned_release_notes():
     assert "What's new in v0.0.20" in rendered
     assert "Added self-learning health checks" in rendered
     assert "Fixed stale guidance links" in rendered
+    assert "Finish Eyes lifecycle" in rendered
+    assert "ASTRA/src/vision/screen_observer.py" in rendered
     assert payload["text"].startswith("ASTRA v0.0.20:")
+
+
+def test_actions_push_without_file_arrays_uses_git_diff_paths():
+    event = push_event()
+    for commit in event["commits"]:
+        commit.pop("added", None)
+        commit.pop("modified", None)
+        commit.pop("removed", None)
+    captured = {}
+
+    class Result:
+        returncode = 0
+        stdout = (
+            b"ASTRA/src/identity/identity_manager.py\0"
+            b"ASTRA/tests/test_identity.py\0"
+        )
+
+    def runner(command, **kwargs):
+        captured["command"] = command
+        captured.update(kwargs)
+        return Result()
+
+    paths = MODULE.collect_changed_files(event, Path("repo"), runner=runner)
+    payload = MODULE.build_payload(event, changed_files=paths)
+    rendered = json.dumps(payload, ensure_ascii=False)
+
+    assert captured["command"][:3] == ["git", "diff", "--name-only"]
+    assert paths == [
+        "ASTRA/src/identity/identity_manager.py",
+        "ASTRA/tests/test_identity.py",
+    ]
+    assert "Changed files:* 2" in rendered
+    assert "src/identity (1)" in rendered
+
+
+def test_file_collection_is_not_limited_by_commit_preview():
+    event = push_event()
+    event["commits"] = []
+    for index in range(13):
+        event["commits"].append(
+            {
+                "id": f"{index:040x}",
+                "message": f"Commit {index}",
+                "modified": [f"ASTRA/src/component_{index}/file.py"],
+            }
+        )
+
+    rendered = json.dumps(MODULE.build_payload(event), ensure_ascii=False)
+
+    assert "Commits:* 13" in rendered
+    assert "Changed files:* 13" in rendered
+    assert "ASTRA/src/component_12/file.py" in rendered
+
+
+def test_component_names_cannot_create_slack_mentions():
+    event = push_event()
+    event["commits"][0]["modified"] = ["ASTRA/src/<!channel>/x.py"]
+    event["commits"][0]["added"] = []
+
+    rendered = json.dumps(MODULE.build_payload(event), ensure_ascii=False)
+
+    assert "<!channel>" not in rendered
+    assert "src/&lt;!channel&gt; (1)" in rendered
+
+
+def test_component_summary_respects_slack_section_limit():
+    files = [f"ASTRA/src/component_{index:04d}/file.py" for index in range(1000)]
+    payload = MODULE.build_payload(push_event(), changed_files=files)
+    summary = payload["blocks"][1]["text"]["text"]
+
+    assert len(summary) <= MODULE.MAX_SECTION_CHARS
+
+
+def test_non_utf8_git_path_is_replaced_before_slack_json_encoding():
+    event = push_event()
+
+    class Result:
+        returncode = 0
+        stdout = b"ASTRA/src/vision/invalid-\xff.py\0"
+
+    paths = MODULE.collect_changed_files(
+        event,
+        Path("repo"),
+        runner=lambda *args, **kwargs: Result(),
+    )
+    payload = MODULE.build_payload(event, changed_files=paths)
+
+    json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    assert "\ufffd" in paths[0]
+
+
+def test_slack_link_delimiters_in_event_urls_are_rejected():
+    event = push_event()
+    event["compare"] = "https://example.com/compare|<!channel>"
+    event["commits"][0]["url"] = "https://example.com/commit|<!channel>"
+
+    rendered = json.dumps(MODULE.build_payload(event), ensure_ascii=False)
+
+    assert "<!channel>" not in rendered
+    assert "Open GitHub comparison" not in rendered
+
+
+def test_strip_markdown_preserves_identifier_underscores():
+    assert MODULE.strip_markdown("Added `last_seen_version`.") == (
+        "Added last_seen_version."
+    )
 
 
 def test_load_release_notes_reads_matching_versioned_changelog(tmp_path):
@@ -172,3 +282,30 @@ def test_post_payload_uses_json_post_without_logging_webhook():
         "timeout": 15,
         "payload": {"text": "hello"},
     }
+
+
+def test_post_payload_rejects_non_2xx_response():
+    class Response:
+        status = 500
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+    with pytest.raises(RuntimeError, match="HTTP 500"):
+        MODULE.post_payload(
+            "https://hooks.slack.com/services/T000/B000/secret",
+            {"text": "hello"},
+            opener=lambda *_args, **_kwargs: Response(),
+        )
+
+
+def test_current_version_has_matching_nonempty_changelog():
+    project_root = Path(__file__).resolve().parents[1]
+
+    release = MODULE.load_release_notes(project_root)
+
+    assert release["source"] == f"CHANGELOG_PENDING_{release['version']}.md"
+    assert release["sections"]

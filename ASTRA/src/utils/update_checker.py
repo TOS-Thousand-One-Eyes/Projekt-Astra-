@@ -1,4 +1,5 @@
 import json
+import urllib.error
 import urllib.request
 
 REPO_URL = "https://github.com/TOS-Thousand-One-Eyes/Projekt-Astra-"
@@ -16,8 +17,12 @@ class UpdateChecker:
         self.fetch = fetch or self._fetch_from_url
 
     def _fetch_from_url(self):
-        with urllib.request.urlopen(self.version_url, timeout=self.timeout) as response:
-            return json.load(response)["version"]
+        try:
+            with urllib.request.urlopen(self.version_url, timeout=self.timeout) as response:
+                return json.load(response)["version"]
+        except urllib.error.HTTPError as error:
+            error.close()
+            raise
 
     def check(self):
         try:

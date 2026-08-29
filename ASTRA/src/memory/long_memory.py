@@ -1,9 +1,10 @@
 import json
 import os
 import threading
-import uuid
 from datetime import datetime
 from pathlib import Path
+
+from utils.file_store import atomic_json_write, interprocess_file_lock
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 DATA_FILE = DATA_DIR / "long_memory.json"
@@ -19,13 +20,15 @@ class LongMemory:
         self.load()
 
     def remember(self, entry, entry_type="chat"):
-        with self._lock:
-            self.entries.append({
+        with self._lock, interprocess_file_lock(self.path):
+            entries = self._read_for_write()
+            entries.append({
                 "timestamp": datetime.now().isoformat(timespec="seconds"),
                 "entry": entry,
                 "type": entry_type,
             })
-            self.save()
+            self._write(entries)
+            self.entries = entries
 
     def recall(self):
         with self._lock:
@@ -48,55 +51,54 @@ class LongMemory:
             same_type = entry_type is None or item.get("type") == entry_type
             return same_text and same_type
 
-        with self._lock:
-            before = len(self.entries)
-            self.entries = [item for item in self.entries if not matches(item)]
-            removed = before - len(self.entries)
+        with self._lock, interprocess_file_lock(self.path):
+            entries = self._read_for_write()
+            before = len(entries)
+            remaining = [item for item in entries if not matches(item)]
+            removed = before - len(remaining)
             if removed:
-                self.save()
+                self._write(remaining)
+            self.entries = remaining
             return removed
 
     def save(self):
-        with self._lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = self.path.with_suffix(
-                f"{self.path.suffix}.{os.getpid()}.{threading.get_ident()}."
-                f"{uuid.uuid4().hex[:8]}.tmp"
-            )
-            try:
-                with open(tmp_path, "w", encoding="utf-8") as f:
-                    json.dump(self.entries, f, indent=2, ensure_ascii=False)
-                os.replace(tmp_path, self.path)
-            finally:
-                try:
-                    tmp_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
+        with self._lock, interprocess_file_lock(self.path):
+            # Validate the current target before replacing it. A corrupt store
+            # may still contain recoverable user history and must not be erased.
+            self._read_for_write()
+            self._write(self.entries)
 
     def load(self):
-        with self._lock:
-            if not self.path.exists():
-                self.entries = []
-                return
+        with self._lock, interprocess_file_lock(self.path):
             try:
-                # utf-8-sig: a hand-edited file saved with a BOM must not reset
-                # the user's long-term memory to empty.
-                with open(self.path, "r", encoding="utf-8-sig") as f:
-                    loaded = json.load(f)
-            except (json.JSONDecodeError, UnicodeDecodeError, OSError) as error:
+                self.entries = self._read()
+            except (json.JSONDecodeError, UnicodeDecodeError, OSError, ValueError) as error:
                 self.entries = []
                 self.load_warning = (
                     f"{self.path.name} could not be loaded ({error}); "
-                    "starting with empty long-term memory."
+                    "starting with empty long-term memory in read-only recovery mode."
                 )
-                return
-            if not isinstance(loaded, list) or not all(
-                isinstance(item, dict) for item in loaded
-            ):
-                self.entries = []
-                self.load_warning = (
-                    f"{self.path.name} does not contain a JSON list of entries; "
-                    "starting with empty long-term memory."
-                )
-                return
-            self.entries = loaded
+
+    def _read(self):
+        if not self.path.exists():
+            return []
+        # utf-8-sig: a hand-edited file saved with a BOM must not reset the
+        # user's long-term memory to empty.
+        with open(self.path, "r", encoding="utf-8-sig") as handle:
+            loaded = json.load(handle)
+        if not isinstance(loaded, list) or not all(
+            isinstance(item, dict) for item in loaded
+        ):
+            raise ValueError("expected a JSON list of entry objects")
+        return loaded
+
+    def _read_for_write(self):
+        try:
+            return self._read()
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError, ValueError) as error:
+            raise OSError(
+                f"Refusing to overwrite unreadable {self.path.name}: {error}"
+            ) from error
+
+    def _write(self, entries):
+        atomic_json_write(self.path, entries, replace_func=os.replace)

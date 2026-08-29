@@ -1,8 +1,9 @@
 import json
 import os
 import threading
-import uuid
 from pathlib import Path
+
+from utils.file_store import atomic_json_write, interprocess_file_lock
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 DATA_FILE = DATA_DIR / "facts.json"
@@ -18,9 +19,13 @@ class Facts:
         self.load()
 
     def learn(self, key, value):
-        with self._lock:
-            self.facts[key.strip().lower()] = value.strip()
-            self.save()
+        clean_key = key.strip().lower()
+        clean_value = value.strip()
+        with self._lock, interprocess_file_lock(self.path):
+            facts = self._read_for_write()
+            facts[clean_key] = clean_value
+            self._write(facts)
+            self.facts = facts
 
     def get(self, key):
         with self._lock:
@@ -31,47 +36,44 @@ class Facts:
             return dict(self.facts)
 
     def save(self):
-        with self._lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = self.path.with_suffix(
-                f"{self.path.suffix}.{os.getpid()}.{threading.get_ident()}."
-                f"{uuid.uuid4().hex[:8]}.tmp"
-            )
-            try:
-                with open(tmp_path, "w", encoding="utf-8") as f:
-                    json.dump(self.facts, f, indent=2, ensure_ascii=False)
-                os.replace(tmp_path, self.path)
-            finally:
-                try:
-                    tmp_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
+        with self._lock, interprocess_file_lock(self.path):
+            # A malformed target may still be recoverable. Never replace it
+            # merely because this instance fell back to an empty dictionary.
+            self._read_for_write()
+            self._write(self.facts)
 
     def load(self):
-        with self._lock:
-            if not self.path.exists():
-                self.facts = {}
-                return
+        with self._lock, interprocess_file_lock(self.path):
             try:
-                # utf-8-sig: a hand-edited file saved with a BOM must not reset
-                # the user's facts to empty.
-                with open(self.path, "r", encoding="utf-8-sig") as f:
-                    loaded = json.load(f)
-            except (json.JSONDecodeError, UnicodeDecodeError, OSError) as error:
+                self.facts = self._read()
+            except (json.JSONDecodeError, UnicodeDecodeError, OSError, ValueError) as error:
                 self.facts = {}
                 self.load_warning = (
                     f"{self.path.name} could not be loaded ({error}); "
-                    "starting with empty facts."
+                    "starting with empty facts in read-only recovery mode."
                 )
-                return
-            if not isinstance(loaded, dict):
-                self.facts = {}
-                self.load_warning = (
-                    f"{self.path.name} does not contain a JSON object; "
-                    "starting with empty facts."
-                )
-                return
-            self.facts = self._normalized_keys(loaded)
+
+    def _read(self):
+        if not self.path.exists():
+            return {}
+        # utf-8-sig: a hand-edited file saved with a BOM must not reset the
+        # user's facts to empty.
+        with open(self.path, "r", encoding="utf-8-sig") as handle:
+            loaded = json.load(handle)
+        if not isinstance(loaded, dict):
+            raise ValueError("expected a JSON object")
+        return self._normalized_keys(loaded)
+
+    def _read_for_write(self):
+        try:
+            return self._read()
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError, ValueError) as error:
+            raise OSError(
+                f"Refusing to overwrite unreadable {self.path.name}: {error}"
+            ) from error
+
+    def _write(self, facts):
+        atomic_json_write(self.path, facts, replace_func=os.replace)
 
     def _normalized_keys(self, loaded):
         # learn() stores keys stripped and lowercased and get() looks them up

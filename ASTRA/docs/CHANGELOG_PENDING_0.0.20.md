@@ -1,6 +1,6 @@
 # Pending CHANGELOG entry — v0.0.20
 
-Status: **review only; not pushed or released**
+Status: **pushed later as part of `DEV-need-check`; not released**
 
 ## Local identity profiles
 

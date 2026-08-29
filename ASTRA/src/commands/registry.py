@@ -92,8 +92,20 @@ class CommandRegistry:
             and self.language_module.available
             and message.strip()
         ):
-            prompt = self._model_prompt(message)
-            response = self.language_module.respond(prompt)
+            try:
+                prompt = self._model_prompt(message)
+                response = self.language_module.respond(prompt)
+            except Exception as error:
+                if self.logger:
+                    self.logger.error(
+                        "Language fallback failed while building context for "
+                        f"message {message!r}: {type(error).__name__}: {error}"
+                    )
+                return DispatchResult(
+                    "Something went wrong preparing the local model context. "
+                    "I've logged it so it can be looked into.",
+                    command_name="LanguageModule",
+                )
             if response:
                 return DispatchResult(
                     response,

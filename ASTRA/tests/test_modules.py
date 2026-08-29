@@ -69,8 +69,9 @@ def test_start_all_continues_when_a_module_raises():
     modules.add_module(FailingModule())
     stub = StubModule()
     modules.add_module(stub)
-    modules.start_all()
+    started = modules.start_all()
     assert stub.started is True
+    assert started == 1
 
 
 def test_start_all_logs_the_failing_modules_name():
@@ -87,8 +88,9 @@ def test_stop_all_continues_when_a_module_raises():
     modules.add_module(FailingModule())
     stub = StubModule()
     modules.add_module(stub)
-    modules.stop_all()
+    stopped = modules.stop_all()
     assert stub.stopped is True
+    assert stopped == 1
 
 
 def test_stop_all_logs_the_failing_modules_name():

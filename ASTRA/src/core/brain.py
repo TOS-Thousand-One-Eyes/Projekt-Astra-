@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from utils.release_notes import build_version_briefing
+
 from commands.registry import build_default_registry
 from experience.experience_manager import ExperienceManager
 from experience.reflection_manager import ReflectionManager
@@ -143,10 +145,15 @@ class Brain:
                 f"{self._session_started_at.strftime('%Y-%m-%d %H:%M:%S')}."
             )
             self._log_last_seen(long_entries)
-            self.modules.start_all()
+            module_total = len(self.modules.list_modules())
+            modules_started = self.modules.start_all()
+            if not isinstance(modules_started, int):
+                # Backwards compatibility for custom module containers that
+                # implement the original no-return lifecycle API.
+                modules_started = module_total
             self.logger.log(
                 f"Modules started: "
-                f"{len(self.modules.list_modules())}."
+                f"{modules_started}/{module_total}."
             )
             self._set_state(self.RUNNING)
         except Exception as error:
@@ -171,8 +178,59 @@ class Brain:
                 f"Hello! I am {self.config.name}."
             )
 
+        try:
+            self._report_profile_version()
+        except Exception as error:
+            # Version briefings are optional startup output. A malformed local
+            # changelog or adapter must not turn a running Brain into a failed
+            # startup from the caller's perspective.
+            self.logger.warning(
+                "Profile version briefing failed "
+                f"({type(error).__name__}: {error}); continuing startup."
+            )
+
         if self.update_checker:
-            self.update_checker.check()
+            try:
+                self.update_checker.check()
+            except Exception as error:
+                # The built-in checker already contains network failures, but
+                # custom checkers/loggers should be non-fatal too.
+                self.logger.warning(
+                    "Update check failed unexpectedly "
+                    f"({type(error).__name__}: {error}); continuing startup."
+                )
+
+    def _report_profile_version(self):
+        if not self.identity:
+            return
+        previous_version = self.identity.last_seen_version
+        resolver = getattr(self.identity_manager, "resolve_profile", None)
+        if callable(resolver):
+            try:
+                previous_version = resolver(self.identity.user_id).get(
+                    "last_seen_version"
+                )
+            except (KeyError, OSError, RuntimeError, ValueError) as error:
+                self.logger.warning(
+                    f"Could not read the profile's last-seen version ({error})."
+                )
+
+        briefing = build_version_briefing(
+            self.identity.display_name,
+            previous_version,
+            self.config.version,
+        )
+        if briefing.text:
+            self.logger.chat(briefing.text)
+
+        marker = getattr(self.identity_manager, "mark_version_seen", None)
+        if briefing.mark_seen and callable(marker):
+            try:
+                marker(self.identity.user_id, briefing.current_version)
+            except (OSError, RuntimeError, ValueError) as error:
+                self.logger.warning(
+                    f"Could not persist the profile's last-seen version ({error})."
+                )
 
     def stop(self):
         self._set_state(self.STOPPING)
@@ -180,10 +238,13 @@ class Brain:
             self.logger.log(
                 f"Stopping {self.config.name}..."
             )
-            self.modules.stop_all()
+            module_total = len(self.modules.list_modules())
+            modules_stopped = self.modules.stop_all()
+            if not isinstance(modules_stopped, int):
+                modules_stopped = module_total
             self.logger.log(
                 f"Modules stopped: "
-                f"{len(self.modules.list_modules())}."
+                f"{modules_stopped}/{module_total}."
             )
             self._log_session_summary()
         except Exception as error:
