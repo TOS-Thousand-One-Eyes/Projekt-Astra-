@@ -1,3 +1,5 @@
+import threading
+
 from memory.facts import Facts
 from memory.context_builder import build_model_prompt
 from memory.long_memory import LongMemory
@@ -303,11 +305,15 @@ def test_memory_manager_forget_with_no_matching_note_leaves_short_memory_untouch
     assert memory.recall() == ["test"]
 
 
-def test_model_prompt_returns_raw_message_without_context(memory):
-    assert build_model_prompt("what should I do?", memory) == "what should I do?"
+def test_model_prompt_keeps_identity_and_grounding_without_memory_context(memory):
+    prompt = build_model_prompt("what should I do?", memory)
+
+    assert prompt.startswith("You are ASTRA, a local-first personal AI assistant.")
+    assert "Memory context:" not in prompt
+    assert prompt.endswith("User message: what should I do?")
 
 
-def test_model_prompt_includes_facts_notes_and_learned_memory(memory):
+def test_model_prompt_includes_facts_and_notes_but_not_stale_learned_memory(memory):
     memory.learn("name", "Erik")
     memory.remember("Compressor oil should be checked weekly.", entry_type="note")
     memory.remember("Learned subject: compressor maintenance. Summary: check oil and vibration.", entry_type="learned")
@@ -317,7 +323,7 @@ def test_model_prompt_includes_facts_notes_and_learned_memory(memory):
     assert "Memory context:" in prompt
     assert "[fact:name] name: Erik" in prompt
     assert "Compressor oil should be checked weekly." in prompt
-    assert "Learned subject: compressor maintenance" in prompt
+    assert "Learned subject: compressor maintenance" not in prompt
     assert "User message: What do you know about compressor oil?" in prompt
 
 
@@ -363,6 +369,58 @@ def test_save_leaves_no_tmp_files_behind(tmp_path):
 
     leftovers = [item.name for item in tmp_path.iterdir() if ".tmp" in item.name]
     assert leftovers == []
+
+
+def test_parallel_long_memory_writes_are_serialized_and_persisted(tmp_path):
+    path = tmp_path / "long_memory.json"
+    memory = LongMemory(path)
+    barrier = threading.Barrier(17)
+    errors = []
+
+    def remember(index):
+        try:
+            barrier.wait()
+            memory.remember(f"entry-{index}")
+        except Exception as error:
+            errors.append(error)
+
+    threads = [threading.Thread(target=remember, args=(index,)) for index in range(16)]
+    for thread in threads:
+        thread.start()
+    barrier.wait()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert len(memory.recall()) == 16
+    assert len(LongMemory(path).recall()) == 16
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_parallel_fact_writes_are_serialized_and_persisted(tmp_path):
+    path = tmp_path / "facts.json"
+    facts = Facts(path)
+    barrier = threading.Barrier(17)
+    errors = []
+
+    def learn(index):
+        try:
+            barrier.wait()
+            facts.learn(f"key-{index}", f"value-{index}")
+        except Exception as error:
+            errors.append(error)
+
+    threads = [threading.Thread(target=learn, args=(index,)) for index in range(16)]
+    for thread in threads:
+        thread.start()
+    barrier.wait()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert len(facts.all()) == 16
+    assert len(Facts(path).all()) == 16
+    assert list(tmp_path.glob("*.tmp")) == []
 
 
 def test_facts_load_normalizes_hand_edited_keys(tmp_path):

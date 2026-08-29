@@ -1,3 +1,6 @@
+import io
+import urllib.error
+
 import pytest
 
 from utils.ollama_client import OllamaClient
@@ -195,3 +198,20 @@ def test_generate_raises_on_empty_cleaned_response():
 
     with pytest.raises(ValueError, match="empty response"):
         client.generate("hello")
+
+
+def test_default_request_closes_http_error_response_stream(monkeypatch):
+    stream = io.BytesIO(b"not found")
+    error = urllib.error.HTTPError(
+        "http://localhost:11434/api/tags", 404, "not found", {}, stream
+    )
+
+    def fail(_request, timeout):
+        raise error
+
+    monkeypatch.setattr("urllib.request.urlopen", fail)
+
+    with pytest.raises(urllib.error.HTTPError):
+        OllamaClient._request_json("http://localhost:11434/api/tags")
+
+    assert stream.closed is True

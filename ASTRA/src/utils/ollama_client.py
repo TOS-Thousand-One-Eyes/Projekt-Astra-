@@ -1,17 +1,19 @@
 import base64
 import json
 import re
+import threading
 import urllib.request
 from pathlib import Path
 
-# Reasoning models emit their <think> block at the start of the response
-# (or, when the prompt template swallows the opening tag, as bare reasoning
-# ending in a lone </think>). All three patterns are anchored to the leading
-# position so a literal "<think>"/"</think>" later in a real answer (e.g. an
-# answer *about* prompt formats) is kept as content, not eaten as markup.
-LEADING_THINK_BLOCK_PATTERN = re.compile(r"\A\s*<think>.*?</think>", re.IGNORECASE | re.DOTALL)
-LEADING_UNCLOSED_THINK_PATTERN = re.compile(r"\A\s*<think>.*", re.IGNORECASE | re.DOTALL)
-LEADING_ORPHAN_THINK_CLOSE_PATTERN = re.compile(r"\A.*?</think>", re.IGNORECASE | re.DOTALL)
+LEADING_THINK_BLOCK_PATTERN = re.compile(
+    r"\A\s*<think>.*?</think>", re.IGNORECASE | re.DOTALL
+)
+LEADING_UNCLOSED_THINK_PATTERN = re.compile(
+    r"\A\s*<think>.*", re.IGNORECASE | re.DOTALL
+)
+LEADING_ORPHAN_THINK_CLOSE_PATTERN = re.compile(
+    r"\A.*?</think>", re.IGNORECASE | re.DOTALL
+)
 
 
 class OllamaClient:
@@ -23,15 +25,27 @@ class OllamaClient:
         health_timeout=3,
         generate_timeout=60,
         request_json=None,
+        options=None,
+        keep_alive=None,
     ):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.health_timeout = health_timeout
         self.generate_timeout = generate_timeout
         self.request_json = request_json or self._request_json
+        self.options = dict(options or {})
+        self.keep_alive = keep_alive
+        self._request_lock = threading.Lock()
+        self._busy = threading.Event()
+
+    @property
+    def busy(self):
+        return self._busy.is_set()
 
     def ensure_available(self):
-        payload = self.request_json(f"{self.base_url}/api/tags", timeout=self.health_timeout)
+        payload = self._serialized_request(
+            f"{self.base_url}/api/tags", timeout=self.health_timeout
+        )
         models = payload.get("models")
         if not isinstance(models, list):
             raise ValueError("Ollama returned an invalid model list.")
@@ -41,11 +55,38 @@ class OllamaClient:
             for item in models
             if isinstance(item, dict)
         }
-        if self.model not in names:
+        if not any(_same_model_name(self.model, name) for name in names if name):
             raise ValueError(f"Ollama model '{self.model}' is not available.")
 
+    def show_model(self, model=None):
+        target = str(model or self.model).strip()
+        if not target:
+            raise ValueError("Model name cannot be empty.")
+        payload = self._serialized_request(
+            f"{self.base_url}/api/show",
+            method="POST",
+            data={"model": target, "verbose": False},
+            timeout=self.health_timeout,
+        )
+        if not isinstance(payload, dict):
+            raise ValueError("Ollama returned invalid model details.")
+        return payload
+
+    def capabilities(self, model=None):
+        payload = self.show_model(model=model)
+        values = payload.get("capabilities")
+        if not isinstance(values, list):
+            return []
+        return [
+            str(value).strip().lower()
+            for value in values
+            if str(value).strip()
+        ]
+
     def list_models(self):
-        payload = self.request_json(f"{self.base_url}/api/tags", timeout=self.health_timeout)
+        payload = self._serialized_request(
+            f"{self.base_url}/api/tags", timeout=self.health_timeout
+        )
         models = payload.get("models")
         if not isinstance(models, list):
             raise ValueError("Ollama returned an invalid model list.")
@@ -58,7 +99,11 @@ class OllamaClient:
             if not isinstance(name, str) or not name.strip():
                 continue
             details = item.get("details") if isinstance(item.get("details"), dict) else {}
-            capabilities = item.get("capabilities") if isinstance(item.get("capabilities"), list) else []
+            capabilities = (
+                item.get("capabilities")
+                if isinstance(item.get("capabilities"), list)
+                else []
+            )
             results.append(
                 {
                     "name": name,
@@ -70,44 +115,70 @@ class OllamaClient:
         return sorted(results, key=lambda model: model["name"].lower())
 
     def generate(self, prompt):
-        payload = self.request_json(
+        data = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+        }
+        self._add_generation_settings(data)
+        payload = self._serialized_request(
             f"{self.base_url}/api/generate",
             method="POST",
-            data={
-                "model": self.model,
-                "prompt": prompt,
-                "stream": False,
-            },
+            data=data,
             timeout=self.generate_timeout,
         )
-        response = payload.get("response")
-        if not isinstance(response, str):
-            raise ValueError("Ollama returned an invalid response.")
-
-        cleaned = self._strip_reasoning(response)
-        if not cleaned:
-            raise ValueError("Ollama returned an empty response.")
-        return cleaned
+        return self._response_text(payload)
 
     def generate_with_images(self, prompt, image_paths):
         images = [encode_image(path) for path in image_paths]
+        return self._generate_with_encoded_images(prompt, images)
+
+    def generate_with_image_bytes(self, prompt, image_bytes):
+        images = []
+        for value in image_bytes:
+            if not isinstance(value, (bytes, bytearray)) or not value:
+                raise ValueError("Image bytes must be non-empty bytes.")
+            images.append(base64.b64encode(bytes(value)).decode("ascii"))
+        return self._generate_with_encoded_images(prompt, images)
+
+    def _generate_with_encoded_images(self, prompt, images):
         if not images:
             raise ValueError("At least one image is required.")
-        payload = self.request_json(
+        data = {
+            "model": self.model,
+            "prompt": prompt,
+            "images": images,
+            "stream": False,
+        }
+        self._add_generation_settings(data)
+        payload = self._serialized_request(
             f"{self.base_url}/api/generate",
             method="POST",
-            data={
-                "model": self.model,
-                "prompt": prompt,
-                "images": images,
-                "stream": False,
-            },
+            data=data,
             timeout=self.generate_timeout,
         )
+        return self._response_text(payload)
+
+    def _add_generation_settings(self, data):
+        if self.options:
+            data["options"] = dict(self.options)
+        if self.keep_alive is not None:
+            data["keep_alive"] = self.keep_alive
+
+    def _serialized_request(self, *args, **kwargs):
+        with self._request_lock:
+            self._busy.set()
+            try:
+                return self.request_json(*args, **kwargs)
+            finally:
+                self._busy.clear()
+
+    def _response_text(self, payload):
+        if not isinstance(payload, dict):
+            raise ValueError("Ollama returned an invalid response payload.")
         response = payload.get("response")
         if not isinstance(response, str):
             raise ValueError("Ollama returned an invalid response.")
-
         cleaned = self._strip_reasoning(response)
         if not cleaned:
             raise ValueError("Ollama returned an empty response.")
@@ -122,9 +193,6 @@ class OllamaClient:
                 break
             cleaned = stripped
         cleaned = LEADING_UNCLOSED_THINK_PATTERN.sub("", cleaned, count=1)
-        # A lone </think> is only reasoning markup when the opening tag never
-        # appeared at all (the template-swallowed-opener case); if the response
-        # had a real <think> anywhere, a remaining </think> is literal content.
         if "<think>" not in response.lower():
             cleaned = LEADING_ORPHAN_THINK_CLOSE_PATTERN.sub("", cleaned, count=1)
         return cleaned.strip()
@@ -136,10 +204,29 @@ class OllamaClient:
         if data is not None:
             payload = json.dumps(data).encode("utf-8")
             headers["Content-Type"] = "application/json"
+        request = urllib.request.Request(
+            url, data=payload, headers=headers, method=method
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return json.load(response)
+        except Exception as error:
+            close = getattr(error, "close", None)
+            if callable(close):
+                close()
+            raise
 
-        request = urllib.request.Request(url, data=payload, headers=headers, method=method)
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return json.load(response)
+
+def _same_model_name(expected, actual):
+    expected = str(expected or "").strip()
+    actual = str(actual or "").strip()
+    if expected == actual:
+        return True
+    if ":" not in expected and actual == expected + ":latest":
+        return True
+    if ":" not in actual and expected == actual + ":latest":
+        return True
+    return False
 
 
 def encode_image(path):

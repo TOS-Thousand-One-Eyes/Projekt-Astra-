@@ -1,8 +1,13 @@
 import pytest
+from types import SimpleNamespace
 
 from commands.registry import CommandRegistry
 from conftest import StubModule
 from core.brain import Brain
+from experience.experience_manager import ExperienceManager
+from experience.reflection_manager import ReflectionManager
+from learning.learning_manager import LearningManager
+from learning.self_learning import SelfLearningManager
 from memory.memory_manager import MemoryManager
 from modules.language_module import LanguageModule
 from modules.module import Module
@@ -194,6 +199,93 @@ class TestUpdateCheck:
         assert running_brain.update_checker is None
 
 
+class TestVersionBriefing:
+
+    class StubIdentityManager:
+        def __init__(self, last_seen=None):
+            self.last_seen = last_seen
+            self.marked = []
+
+        def last_seen_version(self, user_id):
+            assert user_id == "erik"
+            return self.last_seen
+
+        def mark_version_seen(self, user_id, version):
+            self.marked.append((user_id, version))
+
+    class StubReleaseNotes:
+        def __init__(self, message):
+            self.message = message
+            self.calls = []
+
+        def briefing(self, last_seen, current):
+            self.calls.append((last_seen, current))
+            return self.message
+
+    def test_briefing_is_unfiltered_and_marked_seen_after_display(self, config, memory):
+        config.version = "0.0.22"
+        logger = Logger(level="ERROR")
+        manager = self.StubIdentityManager(last_seen="0.0.21")
+        notes = self.StubReleaseNotes("One visible update.")
+        brain = Brain(
+            logger,
+            config,
+            memory,
+            Modules(logger),
+            identity=SimpleNamespace(user_id="erik", display_name="Erik"),
+            identity_manager=manager,
+            release_notes=notes,
+        )
+
+        brain.start()
+
+        assert any("CHAT Astra: One visible update." in item for item in logger.logs)
+        assert manager.marked == [("erik", "0.0.22")]
+        assert notes.calls == [("0.0.21", "0.0.22")]
+
+    def test_version_is_not_marked_seen_when_display_fails(self, config, memory):
+        class FailingChatLogger(Logger):
+            def chat(self, message):
+                raise OSError("display unavailable")
+
+        config.version = "0.0.22"
+        logger = FailingChatLogger()
+        manager = self.StubIdentityManager()
+        brain = Brain(
+            logger,
+            config,
+            memory,
+            Modules(logger),
+            identity=SimpleNamespace(user_id="erik", display_name="Erik"),
+            identity_manager=manager,
+            release_notes=self.StubReleaseNotes("Update."),
+        )
+
+        brain.start()
+
+        assert manager.marked == []
+        assert any("version was not marked as seen" in item for item in logger.logs)
+
+    def test_no_message_or_write_when_there_is_no_new_briefing(self, config, memory):
+        config.version = "0.0.22"
+        logger = Logger()
+        manager = self.StubIdentityManager(last_seen="0.0.22")
+        brain = Brain(
+            logger,
+            config,
+            memory,
+            Modules(logger),
+            identity=SimpleNamespace(user_id="erik", display_name="Erik"),
+            identity_manager=manager,
+            release_notes=self.StubReleaseNotes(None),
+        )
+
+        brain.start()
+
+        assert manager.marked == []
+        assert not any("CHAT" in item for item in logger.logs)
+
+
 class TestModulesLifecycle:
 
     def test_start_starts_every_module(self, config, memory):
@@ -294,6 +386,28 @@ class TestCommands:
     def test_unknown_message_is_echoed(self, running_brain):
         assert running_brain.receive("something random") == "I heard: something random"
 
+    def test_explicit_correction_trace_uses_previous_brain_response(
+        self, config, memory, tmp_path
+    ):
+        manager = SelfLearningManager(tmp_path / "self-learning", mode="review")
+        brain = Brain(
+            Logger(),
+            config,
+            memory,
+            Modules(Logger()),
+            learning=LearningManager(tmp_path / "learning"),
+            self_learning=manager,
+            experience=ExperienceManager(tmp_path / "experience"),
+            reflections=ReflectionManager(tmp_path / "reflections"),
+        )
+        brain.start()
+
+        previous = brain.receive("something random")
+        brain.receive("self learning correction Answer this differently next time.")
+
+        correction = manager.pending()[0]
+        assert correction["previous_assistant"] == previous
+
     def test_unknown_message_uses_language_module_when_available(self, config, memory):
         class StubClient:
             def ensure_available(self):
@@ -307,9 +421,13 @@ class TestCommands:
         brain = Brain(Logger(), config, memory, modules)
         brain.start()
 
-        assert brain.receive("something random") == "Local reply: something random"
+        response = brain.receive("something random")
+        assert response.startswith(
+            "Local reply: You are ASTRA, a local-first personal AI assistant."
+        )
+        assert response.endswith("User message: something random")
 
-    def test_language_module_receives_memory_context_when_available(self, config, memory):
+    def test_language_module_receives_current_memory_context_when_available(self, config, memory):
         prompts = []
 
         class StubClient:
@@ -330,7 +448,7 @@ class TestCommands:
         assert brain.receive("How should I think about line balancing?") == "context-aware reply"
         assert "Memory context:" in prompts[0]
         assert "[fact:name] name: Erik" in prompts[0]
-        assert "Learned subject: line balancing" in prompts[0]
+        assert "Learned subject: line balancing" not in prompts[0]
         assert "User message: How should I think about line balancing?" in prompts[0]
 
     def test_unknown_message_falls_back_to_echo_when_language_module_runtime_fails(self, config, memory):

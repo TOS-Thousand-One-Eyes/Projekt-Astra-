@@ -1,9 +1,12 @@
-import pytest
+import json
 import subprocess
+
+import pytest
 
 from commands.registry import build_default_registry
 from commands.speech_command import SpeechCommand
 from commands.vision_command import VisionCommand
+from config.config import Config
 from memory.memory_manager import MemoryManager
 from speech.speech_manager import SpeechError, SpeechManager
 from vision.image_inspector import ImageInspectionError, ImageInspector
@@ -24,13 +27,14 @@ def png_bytes(width=2, height=3):
 def test_speech_manager_invokes_windows_sapi_runner():
     calls = []
 
-    def runner(args, check, capture_output, text, timeout):
+    def runner(args, check, capture_output, text, input, timeout):
         calls.append(
             {
                 "args": args,
                 "check": check,
                 "capture_output": capture_output,
                 "text": text,
+                "input": input,
                 "timeout": timeout,
             }
         )
@@ -41,9 +45,25 @@ def test_speech_manager_invokes_windows_sapi_runner():
 
     assert spoken == "hello there"
     assert calls[0]["args"][0] == "powershell"
-    assert calls[0]["args"][-1] == "hello there"
+    assert calls[0]["args"][-1] != "hello there"
+    assert calls[0]["input"] == "hello there"
+    assert "[Console]::In.ReadToEnd()" in calls[0]["args"][3]
     assert calls[0]["check"] is True
     assert calls[0]["timeout"] == 20
+
+
+def test_speech_text_cannot_be_interpreted_as_powershell_code():
+    calls = []
+
+    def runner(args, **kwargs):
+        calls.append((args, kwargs))
+
+    payload = "hello'; Remove-Item C:\\\\important; '"
+    manager = SpeechManager(runner=runner, system=lambda: "Windows")
+
+    assert manager.speak(payload) == payload
+    assert all(payload not in argument for argument in calls[0][0])
+    assert calls[0][1]["input"] == payload
 
 
 def test_speech_manager_reports_unsupported_platform():
@@ -249,6 +269,56 @@ def test_vision_command_reports_language_fallback_source():
     assert "- model: qwen3:test" in status
     assert "Vision fallback client available: qwen3:test" in check
     assert "not a dedicated vision model" in check
+
+
+def test_vision_check_rejects_reachable_text_only_model():
+    class StubClient:
+        base_url = "http://localhost:11434"
+        model = "text-only:test"
+
+        def ensure_available(self):
+            return None
+
+        def capabilities(self, _model=None):
+            return ["completion"]
+
+        def generate_with_images(self, prompt, image_paths):
+            return "unused"
+
+    command = VisionCommand(
+        describer=LocalVisionDescriber(client=StubClient(), source="vision")
+    )
+
+    check = command.handle("vision check", "vision check")
+
+    assert "Vision model unavailable" in check
+    assert "does not advertise image/vision capability" in check
+
+
+def test_eyes_commands_persist_enabled_state(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"version": "0.0.19"}), encoding="utf-8")
+    config = Config(path)
+
+    class Observer:
+        enabled = False
+
+        def enable(self):
+            self.enabled = True
+
+        def disable(self):
+            self.enabled = False
+
+    observer = Observer()
+    command = VisionCommand(observer=observer, config=config)
+
+    enabled = command.handle("eyes on", "eyes on")
+    assert "Persisted to config.json" in enabled
+    assert json.loads(path.read_text(encoding="utf-8"))["screen_observer_enabled"] is True
+
+    disabled = command.handle("eyes off", "eyes off")
+    assert "Persisted to config.json" in disabled
+    assert json.loads(path.read_text(encoding="utf-8"))["screen_observer_enabled"] is False
 
 
 def test_local_vision_describer_uses_client_with_image_payload(tmp_path):

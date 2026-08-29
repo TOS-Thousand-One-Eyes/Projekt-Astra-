@@ -5,6 +5,7 @@ import pytest
 
 import main as main_module
 from config.config import Config
+from identity.identity_manager import UserIdentity
 from memory.memory_manager import MemoryManager
 from utils.logger import Logger
 
@@ -19,7 +20,14 @@ def isolated_main(monkeypatch, tmp_path):
         encoding="utf-8",
     )
     monkeypatch.setattr(main_module, "Config", lambda: Config(path=config_path))
-    monkeypatch.setattr(main_module, "MemoryManager", lambda: MemoryManager(data_dir=tmp_path))
+    identity = UserIdentity("erik", "Erik", tmp_path / "users" / "erik")
+    monkeypatch.setattr(main_module, "IdentityManager", lambda: object())
+    monkeypatch.setattr(main_module, "prompt_cli_identity", lambda _manager: identity)
+    monkeypatch.setattr(
+        main_module,
+        "MemoryManager",
+        lambda data_dir=None: MemoryManager(data_dir=data_dir or tmp_path),
+    )
 
 
 class TestBlankInput:
@@ -103,7 +111,14 @@ class TestVisionRuntimeWiring:
             encoding="utf-8",
         )
         monkeypatch.setattr(main_module, "Config", lambda: Config(path=config_path))
-        monkeypatch.setattr(main_module, "MemoryManager", lambda: MemoryManager(data_dir=tmp_path))
+        identity = UserIdentity("erik", "Erik", tmp_path / "users" / "erik")
+        monkeypatch.setattr(main_module, "IdentityManager", lambda: object())
+        monkeypatch.setattr(main_module, "prompt_cli_identity", lambda _manager: identity)
+        monkeypatch.setattr(
+            main_module,
+            "MemoryManager",
+            lambda data_dir=None: MemoryManager(data_dir=data_dir or tmp_path),
+        )
         captured = {}
         original_init = main_module.Brain.__init__
 

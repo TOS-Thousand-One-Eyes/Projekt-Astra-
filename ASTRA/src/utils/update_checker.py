@@ -1,4 +1,5 @@
 import json
+import re
 import urllib.request
 
 REPO_URL = "https://github.com/TOS-Thousand-One-Eyes/Projekt-Astra-"
@@ -16,8 +17,16 @@ class UpdateChecker:
         self.fetch = fetch or self._fetch_from_url
 
     def _fetch_from_url(self):
-        with urllib.request.urlopen(self.version_url, timeout=self.timeout) as response:
-            return json.load(response)["version"]
+        try:
+            with urllib.request.urlopen(
+                self.version_url, timeout=self.timeout
+            ) as response:
+                return json.load(response)["version"]
+        except Exception as error:
+            close = getattr(error, "close", None)
+            if callable(close):
+                close()
+            raise
 
     def check(self):
         try:
@@ -48,6 +57,7 @@ class UpdateChecker:
     def _report_latest_without_comparison(self):
         try:
             latest = self.fetch()
+            self._parse(latest)
         except Exception as error:
             self.logger.debug(f"Update check failed: {error}")
             return
@@ -55,7 +65,12 @@ class UpdateChecker:
 
     @staticmethod
     def _parse(version):
-        return tuple(int(part) for part in version.split("."))
+        if not isinstance(version, str):
+            raise ValueError("Version must be text.")
+        text = version.strip()
+        if not re.fullmatch(r"\d+(?:\.\d+)*", text):
+            raise ValueError("Version must contain only numeric dot-separated parts.")
+        return tuple(int(part) for part in text.split("."))
 
     @staticmethod
     def _pad_to_same_length(first, second):

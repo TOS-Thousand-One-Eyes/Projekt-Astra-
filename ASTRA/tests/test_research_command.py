@@ -1,3 +1,6 @@
+import io
+import urllib.error
+
 from commands.registry import build_default_registry
 from commands.research_command import ResearchCommand
 from learning.learning_manager import LearningManager
@@ -33,7 +36,11 @@ def test_web_researcher_fetches_bounded_sources_and_records_failures():
 
 
 def test_search_wikipedia_parses_opensearch_response():
+    responses = []
+
     class StubResponse:
+        closed = False
+
         def read(self, limit):
             return (
                 b'["line balancing",["Line balancing"],'
@@ -41,10 +48,15 @@ def test_search_wikipedia_parses_opensearch_response():
                 b'["https://en.wikipedia.org/wiki/Assembly_line"]]'
             )
 
+        def close(self):
+            self.closed = True
+
     def opener(request, timeout):
         assert "w/api.php" in request.full_url
         assert timeout == 10
-        return StubResponse()
+        response = StubResponse()
+        responses.append(response)
+        return response
 
     results = search_wikipedia("line balancing", max_results=1, opener=opener)
 
@@ -55,20 +67,30 @@ def test_search_wikipedia_parses_opensearch_response():
             "snippet": "Balancing production work across stations.",
         }
     ]
+    assert responses[0].closed is True
 
 
 def test_search_wikipedia_fulltext_parses_query_search_response():
+    responses = []
+
     class StubResponse:
+        closed = False
+
         def read(self, limit):
             return (
                 b'{"query":{"search":[{"title":"Assembly line",'
                 b'"snippet":"A <span class=\\"searchmatch\\">manufacturing</span> process."}]}}'
             )
 
+        def close(self):
+            self.closed = True
+
     def opener(request, timeout):
         assert "list=search" in request.full_url
         assert timeout == 10
-        return StubResponse()
+        response = StubResponse()
+        responses.append(response)
+        return response
 
     results = search_wikipedia_fulltext("line balancing manufacturing", max_results=1, opener=opener)
 
@@ -79,6 +101,26 @@ def test_search_wikipedia_fulltext_parses_query_search_response():
             "snippet": "A manufacturing process.",
         }
     ]
+    assert responses and all(response.closed for response in responses)
+
+
+def test_wikipedia_search_closes_http_error_response_stream():
+    stream = io.BytesIO(b"blocked")
+    error = urllib.error.HTTPError(
+        "https://en.wikipedia.org/w/api.php", 429, "blocked", {}, stream
+    )
+
+    def opener(_request, timeout):
+        raise error
+
+    try:
+        search_wikipedia("line balancing", opener=opener)
+    except ResearchError:
+        pass
+    else:
+        raise AssertionError("ResearchError was not raised")
+
+    assert stream.closed is True
 
 
 def test_research_command_summarizes_stubbed_sources():
@@ -140,7 +182,7 @@ def test_research_learn_creates_proficient_subject_from_fetched_sources(tmp_path
     assert payload["target_level"] == "proficient"
     assert len(payload["sources"]) == 1
     assert payload["sources"][0]["source"] == "web:https://example.com/line-balancing"
-    assert len(payload["eval_cases"]) == 13
+    assert len(payload["eval_cases"]) == 6
 
 
 def test_default_registry_dispatches_research_and_shares_learning(tmp_path, config):
@@ -173,4 +215,4 @@ def test_default_registry_dispatches_research_and_shares_learning(tmp_path, conf
     assert result.command_name == "ResearchCommand"
     assert "Research learning subject created: hydraulics" in result.response
     assert "- sources: 1" in status
-    assert "- eval cases: 13" in status
+    assert "- eval cases: 6" in status

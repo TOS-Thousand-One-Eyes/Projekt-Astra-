@@ -23,15 +23,18 @@ class SpeechManager:
             raise SpeechError("Speech is currently implemented for Windows SAPI only.")
         script = (
             "Add-Type -AssemblyName System.Speech; "
+            "$text = [Console]::In.ReadToEnd(); "
+            "if ([string]::IsNullOrWhiteSpace($text)) { exit 2 }; "
             "$speaker = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-            "$speaker.Speak($args[0])"
+            "try { $speaker.Speak($text) } finally { $speaker.Dispose() }"
         )
         try:
             self.runner(
-                ["powershell", "-NoProfile", "-Command", script, clean],
+                ["powershell", "-NoProfile", "-Command", script],
                 check=True,
                 capture_output=True,
                 text=True,
+                input=clean,
                 timeout=self.speak_timeout,
             )
         except subprocess.TimeoutExpired as error:

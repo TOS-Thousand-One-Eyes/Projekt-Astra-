@@ -1,5 +1,6 @@
 from commands.base import DispatchResult, looks_like_shell_command, normalize
 from commands.action_command import ActionCommand
+from commands.backup_command import BackupCommand
 from commands.code_command import CodeCommand
 from commands.diagnostics_command import DiagnosticsCommand
 from commands.exit_command import ExitCommand
@@ -8,6 +9,7 @@ from commands.export_command import ExportCommand
 from commands.fact_command import FactCommand
 from commands.greeting_command import GreetingCommand
 from commands.help_command import HelpCommand
+from commands.identity_command import IdentityCommand
 from commands.jarvis_command import JarvisCommand
 from commands.learning_command import LearningCommand
 from commands.memory_command import MemoryCommand
@@ -24,10 +26,24 @@ from memory.context_builder import build_model_prompt
 
 class CommandRegistry:
 
-    def __init__(self, commands, language_module=None, memory=None, context_builder=None, logger=None):
+    def __init__(
+        self,
+        commands,
+        language_module=None,
+        memory=None,
+        context_builder=None,
+        logger=None,
+        learning=None,
+        self_learning=None,
+        identity=None,
+    ):
         self.commands = commands
         self.language_module = language_module
         self.memory = memory
+        self.learning = learning
+        self.self_learning = self_learning
+        self.identity = identity
+        self._uses_default_context_builder = context_builder is None
         self.context_builder = context_builder or build_model_prompt
         self.logger = logger
 
@@ -37,12 +53,14 @@ class CommandRegistry:
         except Exception as error:
             if self.logger:
                 self.logger.error(
-                    f"Failed to normalize message {message!r}: {type(error).__name__}: {error}"
+                    f"Failed to normalize message {message!r}: "
+                    f"{type(error).__name__}: {error}"
                 )
             return DispatchResult(
                 "Something went wrong handling that. I've logged it so it can be looked into.",
                 command_name="normalize-error",
             )
+
         for command in self.commands:
             try:
                 response = command.handle(message, normalized)
@@ -57,22 +75,47 @@ class CommandRegistry:
                     command_name=type(command).__name__,
                 )
             if response is not None:
-                return DispatchResult(response, command.stops_brain, command_name=type(command).__name__)
+                return DispatchResult(
+                    response,
+                    command.stops_brain,
+                    command_name=type(command).__name__,
+                )
+
         if looks_like_shell_command(message):
             return DispatchResult(
                 "That looks like a shell command, not a chat message - did it get typed into the wrong window?",
                 command_name="shell-guard",
             )
-        if self.language_module and self.language_module.available and message.strip():
+
+        if (
+            self.language_module
+            and self.language_module.available
+            and message.strip()
+        ):
             prompt = self._model_prompt(message)
             response = self.language_module.respond(prompt)
             if response:
-                return DispatchResult(response, command_name="LanguageModule")
-        return DispatchResult(f"I heard: {message}", command_name="echo")
+                return DispatchResult(
+                    response,
+                    command_name="LanguageModule",
+                )
+
+        return DispatchResult(
+            f"I heard: {message}",
+            command_name="echo",
+        )
 
     def _model_prompt(self, message):
-        if not self.memory:
-            return message
+        if self._uses_default_context_builder:
+            return self.context_builder(
+                message,
+                self.memory,
+                learning=self.learning,
+                self_learning=self.self_learning,
+                identity=self.identity,
+            )
+
+        # Backwards-compatible custom context builders keep the old 2-arg API.
         return self.context_builder(message, self.memory)
 
 
@@ -92,31 +135,83 @@ def build_default_registry(
     reflections=None,
     researcher=None,
     logger=None,
+    self_learning=None,
+    screen_observer=None,
+    identity=None,
+    identity_manager=None,
 ):
     fact = FactCommand(memory, logger=logger)
     note = MemoryCommand(memory, logger=logger)
-    greeting = GreetingCommand(config, memory, logger=logger)
+    greeting = GreetingCommand(config, memory, logger=logger, identity=identity)
     farewell = ExitCommand(config, logger=logger)
     export = ExportCommand(config, memory, logger=logger)
-    diagnostics = DiagnosticsCommand(config, memory, logger=logger)
-    learning_command = LearningCommand(memory, learning=learning, language_module=language_module, logger=logger)
-    research_command = ResearchCommand(learning=learning_command.learning, researcher=researcher, logger=logger)
-    model_command = ModelCommand(language_module=language_module, config=config, logger=logger)
-    experience_command = ExperienceCommand(experience=experience, logger=logger)
-    action_command = ActionCommand(actions=actions, logger=logger)
+    backup = BackupCommand(
+        config,
+        memory,
+        identity=identity,
+        logger=logger,
+    )
+    experience_command = ExperienceCommand(
+        experience=experience,
+        logger=logger,
+    )
+
+    learning_command = LearningCommand(
+        memory,
+        learning=learning,
+        language_module=language_module,
+        self_learning=self_learning,
+        config=config,
+        experience=experience_command.experience,
+        logger=logger,
+    )
+    research_command = ResearchCommand(
+        learning=learning_command.learning,
+        researcher=researcher,
+        logger=logger,
+    )
+    model_command = ModelCommand(
+        language_module=language_module,
+        config=config,
+        logger=logger,
+        screen_observer=screen_observer,
+    )
+    diagnostics = DiagnosticsCommand(
+        config,
+        memory,
+        logger=logger,
+        learning=learning_command.learning,
+        self_learning=self_learning,
+        experience=experience_command.experience,
+    )
+    action_command = ActionCommand(
+        actions=actions,
+        logger=logger,
+    )
     reflection_command = ReflectionCommand(
         experience=experience_command.experience,
         reflections=reflections,
         actions=action_command.actions,
         logger=logger,
     )
-    system_action_command = SystemActionCommand(system_actions=system_actions, logger=logger)
-    reminder_command = ReminderCommand(reminders=reminders, logger=logger)
-    speech_command = SpeechCommand(speech=speech, logger=logger)
+    system_action_command = SystemActionCommand(
+        system_actions=system_actions,
+        logger=logger,
+    )
+    reminder_command = ReminderCommand(
+        reminders=reminders,
+        logger=logger,
+    )
+    speech_command = SpeechCommand(
+        speech=speech,
+        logger=logger,
+    )
     vision_command = VisionCommand(
         inspector=vision,
         describer=vision_describer,
         language_module=language_module,
+        observer=screen_observer,
+        config=config,
         logger=logger,
     )
     jarvis_command = JarvisCommand(
@@ -133,56 +228,77 @@ def build_default_registry(
         logger=logger,
     )
     web_command = WebCommand(logger=logger)
-    code_command = CodeCommand(inspector=code, logger=logger)
-    help_command = HelpCommand(
-        [
-            fact,
-            note,
-            learning_command,
-            research_command,
-            model_command,
-            experience_command,
-            reflection_command,
-            action_command,
-            system_action_command,
-            reminder_command,
-            jarvis_command,
-            web_command,
-            speech_command,
-            vision_command,
-            code_command,
-            greeting,
-            farewell,
-            export,
-            diagnostics,
-        ],
+    code_command = CodeCommand(
+        inspector=code,
+        logger=logger,
+    )
+    identity_command = IdentityCommand(
+        identity=identity,
+        identity_manager=identity_manager,
         logger=logger,
     )
 
+    commands = [
+        identity_command,
+        fact,
+        note,
+        learning_command,
+        research_command,
+        model_command,
+        experience_command,
+        reflection_command,
+        action_command,
+        system_action_command,
+        reminder_command,
+        jarvis_command,
+        web_command,
+        speech_command,
+        vision_command,
+        code_command,
+        greeting,
+        farewell,
+        export,
+        backup,
+        diagnostics,
+    ]
+
+    help_command = HelpCommand(
+        commands,
+        logger=logger,
+    )
+    # Preserve the original command order: Help sits before greeting/farewell
+    # so "help" cannot accidentally fall through to generic chat.
+    dispatch_commands = [
+        identity_command,
+        fact,
+        note,
+        learning_command,
+        research_command,
+        model_command,
+        experience_command,
+        reflection_command,
+        action_command,
+        system_action_command,
+        reminder_command,
+        jarvis_command,
+        web_command,
+        speech_command,
+        vision_command,
+        code_command,
+        help_command,
+        greeting,
+        farewell,
+        export,
+        backup,
+        diagnostics,
+    ]
+
     return CommandRegistry(
-        [
-            fact,
-            note,
-            learning_command,
-            research_command,
-            model_command,
-            experience_command,
-            reflection_command,
-            action_command,
-            system_action_command,
-            reminder_command,
-            jarvis_command,
-            web_command,
-            speech_command,
-            vision_command,
-            code_command,
-            help_command,
-            greeting,
-            farewell,
-            export,
-            diagnostics,
-        ],
+        dispatch_commands,
         language_module=language_module,
         memory=memory,
+        learning=learning_command.learning,
+        self_learning=self_learning,
+        identity=identity,
         logger=logger,
     )

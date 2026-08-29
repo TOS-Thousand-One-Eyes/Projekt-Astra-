@@ -1,4 +1,7 @@
 import json
+import threading
+
+import pytest
 
 from config.config import Config, DEFAULTS, UNKNOWN_VERSION
 
@@ -170,6 +173,27 @@ def test_present_version_produces_no_load_warning(tmp_path):
     assert config.load_warnings == []
 
 
+def test_malformed_version_loads_as_unknown_with_warning(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"version": "twenty two"}), encoding="utf-8")
+
+    config = Config(path=path)
+
+    assert config.version == UNKNOWN_VERSION
+    assert any("valid \"version\"" in warning for warning in config.load_warnings)
+
+
+def test_persist_rejects_malformed_version(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"version": "0.0.21"}), encoding="utf-8")
+    config = Config(path=path)
+
+    with pytest.raises(ValueError, match="major.minor.patch"):
+        config.persist({"version": "22"})
+
+    assert json.loads(path.read_text(encoding="utf-8"))["version"] == "0.0.21"
+
+
 def test_string_false_for_boolean_setting_keeps_the_default(tmp_path):
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"use_language_fallback": "false"}), encoding="utf-8")
@@ -216,6 +240,24 @@ def test_float_timeout_is_accepted(tmp_path):
     assert config.load_warnings == []
 
 
+def test_identity_auto_lock_accepts_zero_and_bounds_invalid_values(tmp_path):
+    disabled_path = tmp_path / "disabled.json"
+    disabled_path.write_text(
+        json.dumps({"version": "1.2.3", "identity_auto_lock_minutes": 0}),
+        encoding="utf-8",
+    )
+    assert Config(path=disabled_path).identity_auto_lock_minutes == 0
+
+    invalid_path = tmp_path / "invalid.json"
+    invalid_path.write_text(
+        json.dumps({"version": "1.2.3", "identity_auto_lock_minutes": 2000}),
+        encoding="utf-8",
+    )
+    config = Config(path=invalid_path)
+    assert config.identity_auto_lock_minutes == DEFAULTS["identity_auto_lock_minutes"]
+    assert any("identity_auto_lock_minutes" in item for item in config.load_warnings)
+
+
 def test_non_string_name_keeps_the_default_and_warns(tmp_path):
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"name": 42}), encoding="utf-8")
@@ -254,3 +296,63 @@ def test_utf8_bom_config_file_loads_normally(tmp_path):
     config = Config(path=path)
     assert config.name == "TestBot"
     assert config.load_warnings == []
+
+
+def test_persist_atomically_updates_file_and_runtime_instance(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"version": "0.0.18"}), encoding="utf-8")
+    config = Config(path=path)
+
+    assert config.persist(
+        {"self_learning_mode": "auto", "screen_observer_enabled": True}
+    )
+
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["self_learning_mode"] == "auto"
+    assert saved["screen_observer_enabled"] is True
+    assert config.self_learning_mode == "auto"
+    assert config.screen_observer_enabled is True
+
+
+def test_parallel_config_instances_do_not_lose_each_others_updates(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"version": "0.0.19"}), encoding="utf-8")
+    first = Config(path=path)
+    second = Config(path=path)
+    barrier = threading.Barrier(3)
+    results = []
+
+    def save(config, updates):
+        barrier.wait()
+        results.append(config.persist(updates))
+
+    threads = [
+        threading.Thread(
+            target=save,
+            args=(first, {"self_learning_mode": "auto"}),
+        ),
+        threading.Thread(
+            target=save,
+            args=(second, {"screen_observer_enabled": True}),
+        ),
+    ]
+    for thread in threads:
+        thread.start()
+    barrier.wait()
+    for thread in threads:
+        thread.join()
+
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert results == [True, True]
+    assert saved["self_learning_mode"] == "auto"
+    assert saved["screen_observer_enabled"] is True
+
+
+def test_persist_refuses_to_overwrite_corrupt_config(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text("{broken", encoding="utf-8")
+    config = Config(path=path)
+
+    assert config.persist({"self_learning_mode": "auto"}) is False
+    assert path.read_text(encoding="utf-8") == "{broken"
+    assert any("Failed to persist config settings" in item for item in config.load_warnings)
